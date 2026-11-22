@@ -56,19 +56,18 @@
 # dir = "~/.mi-harness/extra"
 # depth = "unlimited"
 #
-# Las correcciones de abajo son las de la máquina descrita en
-# docs/research/local-inventory.md (sección 1) y docs/research/skills-cli-internals.md
-# (hecho 12).
+# Las correcciones de abajo vienen de una máquina real: dónde guardan sus skills Codex,
+# Pi y Kilo cuando no coincide con lo que dice su documentación.
 
-# Codex guarda sus skills en ~/.codex/skills (9 carpetas reales). La documentación lo
-# ubica en ~/.agents/skills, que Codex también lee.
+# Codex guarda sus skills en ~/.codex/skills. La documentación lo ubica en
+# ~/.agents/skills, que Codex también lee.
 [[agent]]
 id = "codex"
 global_dir = "~/.codex/skills"
 reads_universal = true
 
-# Pi vive en ~/.pi/agent; sus 5 skills son enlaces a ~/.agents/skills. La documentación
-# lo ubica en ~/.agents/skills.
+# Pi vive en ~/.pi/agent, y sus skills pueden ser enlaces a ~/.agents/skills. La
+# documentación lo ubica en ~/.agents/skills.
 [[agent]]
 id = "pi"
 global_dir = "~/.pi/agent/skills"
