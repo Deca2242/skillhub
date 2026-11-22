@@ -1,0 +1,11 @@
+skillhub   1 Skills (3)  2 Actualizar (2)  3 Instalar  4 Salud 
+╭──────────────────────────────────────────────────────────────────────────────╮
+│ ¿Aplicar todas las actualizaciones?                                          │
+│ Se aplican de a una: alpha.                                                  │
+│ Quedan fuera: myclone (bloqueada: el clon tiene archivos modificados o sin   │
+│ seguimiento) y gamma (tiene cambios tuyos: aplícala sola).                   │
+│ Antes de cada una se guarda la versión actual; se deshace cada una desde el  │
+│ Historial (h).                                                               │
+│                                             [s] Sí  [n] No  [v] Ver detalles │
+╰──────────────────────────────────────────────────────────────────────────────╯
+esc no                                                                          

@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "skills": {
+    "old-skill": {
+      "source": "owner/old",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/owner/old.git",
+      "skillPath": "SKILL.md",
+      "skillFolderHash": "ffffffffffffffffffffffffffffffffffffffff",
+      "installedAt": "2025-01-01T00:00:00.000Z",
+      "updatedAt": "2025-01-02T00:00:00.000Z"
+    }
+  }
+}

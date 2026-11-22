@@ -1,0 +1,30 @@
+skillhub   1 Skills (17)  2 Actualizar  3 Instalar  4 Salud (26)   h historial • c ajustes
+17 skills · 13 activas · 4 desactivadas · 0 con actualización · 11 con problemas
+╭──────────────────────────────────────╮╭──────────────────────────────────────────────────────────╮
+│ Skills (17)                          ││ agent-browser
+│ ⚠ accessibility          enlace roto ││ agent-browser
+│ ● agent-browser          sin revisar ││
+│ ● archify                sin revisar ││ Disponible en: Claude Code, Codex, Cursor, Droid, Gemini
+│ ⚠ brainstorming        sin gestionar ││ CLI, GitHub Copilot, Kilo Code, OpenCode y Pi
+│ ⚠ computer-use            modificada ││ Origen: owner/agent-browser
+│ ⚠ domain-driven-design   enlace roto ││
+│ ● find-skills            sin revisar ││ [d] Desactivar   [e] Eliminar
+│ ⚠ git-guardrails-clau…   enlace roto ││ [l] Elegir agentes   [x] Ignorar
+│ ● grill-me               sin revisar ││ [enter] Ver todo
+│ ● grill-with-docs        sin revisar ││
+│ ⚠ humanizer            sin gestionar ││
+│ ⚠ i-have-adhd          sin gestionar ││
+│ ● karpathy-guidelines    sin revisar ││
+│ ⚠ orca-cli                modificada ││
+│ ⚠ orchestration           modificada ││
+│ ⚠ requirements-elicit… sin gestionar ││
+│ ⚠ web-quality-audit      enlace roto ││
+│                                      ││
+│                                      ││
+│                                      ││
+│                                      ││
+│                                      ││
+│                                      ││
+╰──────────────────────────────────────╯╰──────────────────────────────────────────────────────────╯
+d desactivar • e eliminar • l elegir agentes • enter ver todo • x ignorar • / buscar • f filtrar • g
+ver por agente • ? ayuda • q salir

@@ -1,0 +1,100 @@
+{
+  "version": 1,
+  "candidates": [
+    {
+      "id": "lock:find-skills@3f2a",
+      "target": "lock:find-skills",
+      "skills": [
+        "lock:find-skills"
+      ],
+      "from_sha": "1111111111111111111111111111111111111111",
+      "installed_sha_at_stage": "1111111111111111111111111111111111111111",
+      "to_commit": "9d8c7b6a5f4e3d2c1b0a9d8c7b6a5f4e3d2c1b0a",
+      "to_sha": "2222222222222222222222222222222222222222",
+      "staged_path": "/home/user/.cache/skillhub/staging/lock_find-skills-2222",
+      "file_changes": [
+        {
+          "path": "SKILL.md",
+          "change": "modified"
+        },
+        {
+          "path": "scripts/run.sh",
+          "change": "added"
+        }
+      ],
+      "frontmatter_delta": {
+        "changed": [
+          "description"
+        ]
+      },
+      "labels": [
+        "text_only"
+      ],
+      "ruleset_version": 1,
+      "first_seen_at": "2026-11-20T18:30:00Z",
+      "state": "pending"
+    },
+    {
+      "id": "lock:grill-me@aa01",
+      "target": "lock:grill-me",
+      "skills": [
+        "lock:grill-me"
+      ],
+      "from_sha": "3333333333333333333333333333333333333333",
+      "installed_sha_at_stage": "3333333333333333333333333333333333333333",
+      "to_commit": "0a0b0c0d0e0f0a0b0c0d0e0f0a0b0c0d0e0f0a0b",
+      "to_sha": "4444444444444444444444444444444444444444",
+      "staged_path": "/home/user/.cache/skillhub/staging/lock_grill-me-4444",
+      "file_changes": [
+        {
+          "path": "SKILL.md",
+          "change": "modified"
+        }
+      ],
+      "frontmatter_delta": {
+        "changed": null
+      },
+      "labels": [
+        "text_only"
+      ],
+      "ruleset_version": 1,
+      "first_seen_at": "2026-11-18T18:30:00Z",
+      "state": "applied"
+    }
+  ],
+  "skips": [
+    {
+      "target": "lock:caveman",
+      "to_sha": "5555555555555555555555555555555555555555",
+      "at": "2026-11-19T18:30:00Z"
+    }
+  ],
+  "checks": {
+    "last_run": "2026-11-20T18:30:00Z",
+    "last_success": "2026-11-20T18:30:00Z",
+    "last_failed": false
+  },
+  "notified": {
+    "candidate_ids": [
+      "lock:find-skills@3f2a"
+    ],
+    "check_failure": false,
+    "operation_id": "op-20261120-1"
+  },
+  "results": {
+    "lock:find-skills": {
+      "state": "update_available",
+      "checked_at": "2026-11-20T18:30:00Z"
+    },
+    "lock:gone": {
+      "state": "up_to_date",
+      "checked_at": "2026-11-20T18:30:00Z",
+      "removed_upstream": true
+    },
+    "lock:offline": {
+      "state": "check_failed",
+      "checked_at": "2026-11-20T18:30:00Z",
+      "detail": "gh api: timeout"
+    }
+  }
+}

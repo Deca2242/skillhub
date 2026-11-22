@@ -1,0 +1,14 @@
+skillhub   1 Skills (17)  2 Actualizar  3 Instalar  4 Salud (26)   h historial • c ajustes
+╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│
+│  Instala una skill desde GitHub o desde un sitio web, en cuatro pasos:
+│
+│  (1) De dónde la traigo: escribes su origen, por ejemplo owner/repo o https://sitio.
+│  (2) Revisa lo que trae: ves sus archivos y qué hace cada cambio, antes de instalar nada.
+│  (3) Elige los agentes: marcas en cuáles queda disponible.
+│  (4) Confirma: lees el resumen y respondes sí o no. Se deshace con z enseguida, o desde el Historial (h).
+│
+│  Pulsa enter para empezar.
+│
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+enter empezar • r revisar ahora • ? ayuda • q salir

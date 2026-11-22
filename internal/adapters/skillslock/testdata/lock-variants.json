@@ -1,0 +1,70 @@
+{
+  "version": 3,
+  "skills": {
+    "plain": {
+      "source": "owner/plain",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/owner/plain.git",
+      "skillPath": "SKILL.md",
+      "skillFolderHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "installedAt": "2026-09-01T00:00:00.000Z",
+      "updatedAt": "2026-09-02T00:00:00.000Z"
+    },
+    "pinned": {
+      "source": "owner/pinned",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/owner/pinned.git",
+      "ref": "v1.2.0",
+      "skillPath": "skills/pinned/SKILL.md",
+      "skillFolderHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "installedAt": "2026-09-03T00:00:00.000Z",
+      "updatedAt": "2026-09-04T00:00:00.000Z"
+    },
+    "committed": {
+      "source": "owner/committed",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/owner/committed.git",
+      "skillPath": "skills/committed/SKILL.md",
+      "skillFolderHash": "cccccccccccccccccccccccccccccccccccccccc",
+      "commit": "c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0",
+      "installedAt": "2026-09-05T00:00:00.000Z",
+      "updatedAt": "2026-09-06T00:00:00.000Z"
+    },
+    "pinned-committed": {
+      "source": "owner/pinned-committed",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/owner/pinned-committed.git",
+      "ref": "d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0",
+      "skillPath": "skills/pc/SKILL.md",
+      "skillFolderHash": "dddddddddddddddddddddddddddddddddddddddd",
+      "commit": "d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0",
+      "installedAt": "2026-09-07T00:00:00.000Z",
+      "updatedAt": "2026-09-08T00:00:00.000Z"
+    },
+    "renamed": {
+      "source": "owner/renamed",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/owner/renamed.git",
+      "skillPath": "skills/original/SKILL.md",
+      "skillFolderHash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "skillName": "original",
+      "pluginName": "tools <&> é",
+      "extra": {
+        "weights": [
+          1,
+          2.50,
+          1e3
+        ],
+        "enabled": false,
+        "note": null
+      },
+      "installedAt": "2026-09-09T00:00:00.000Z",
+      "updatedAt": "2026-09-10T00:00:00.000Z"
+    }
+  },
+  "dismissed": {},
+  "lastSelectedAgents": [],
+  "futureKey": {
+    "nested": true
+  }
+}

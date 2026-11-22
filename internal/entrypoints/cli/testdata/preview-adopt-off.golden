@@ -1,0 +1,104 @@
+$ skillhub skills adopt-off --dry-run
+Plan: Adoptar como desactivadas las skills de OFF/
+Skill accessibility:
+Carpeta: ~/.agents/skills/OFF/accessibility → ~/.agents/.skillhub/disabled/accessibility
+Enlaces que se quitan:
+  ~/.claude/skills/OFF/accessibility → ../../../.agents/skills/OFF/accessibility (claude-code, opencode)
+  ~/.factory/skills/accessibility → ../../.agents/skills/accessibility (droid) [roto]
+  ~/.junie/skills/accessibility → ../../.agents/skills/accessibility (junie) [roto]
+  ~/.kilocode/skills/accessibility → ../../.agents/skills/accessibility (kilo) [roto]
+  ~/.kiro/skills/accessibility → ../../.agents/skills/accessibility (kiro-cli) [roto]
+  ~/.pi/agent/skills/accessibility → ../../../.agents/skills/accessibility (pi) [roto]
+  ~/.qwen/skills/accessibility → ../../.agents/skills/accessibility (qwen-code) [roto]
+Su entrada del lock se aparca junto con la carpeta, para que «npx skills update» no la reinstale.
+Enlaces que se recrearán al activarla:
+  ~/.factory/skills/accessibility → ../../.agents/skills/accessibility
+  ~/.junie/skills/accessibility → ../../.agents/skills/accessibility
+  ~/.kilocode/skills/accessibility → ../../.agents/skills/accessibility
+  ~/.kiro/skills/accessibility → ../../.agents/skills/accessibility
+  ~/.pi/agent/skills/accessibility → ../../../.agents/skills/accessibility
+  ~/.qwen/skills/accessibility → ../../.agents/skills/accessibility
+Skill domain-driven-design:
+Carpeta: ~/.agents/skills/OFF/domain-driven-design → ~/.agents/.skillhub/disabled/domain-driven-design
+Enlaces que se quitan:
+  ~/.claude/skills/OFF/domain-driven-design → ../../../.agents/skills/OFF/domain-driven-design (claude-code, opencode)
+  ~/.config/devin/skills/domain-driven-design → ../../../.agents/skills/domain-driven-design (devin) [roto]
+  ~/.factory/skills/domain-driven-design → ../../.agents/skills/domain-driven-design (droid) [roto]
+  ~/.junie/skills/domain-driven-design → ../../.agents/skills/domain-driven-design (junie) [roto]
+  ~/.kilocode/skills/domain-driven-design → ../../.agents/skills/domain-driven-design (kilo) [roto]
+  ~/.kiro/skills/domain-driven-design → ../../.agents/skills/domain-driven-design (kiro-cli) [roto]
+Su entrada del lock se aparca junto con la carpeta, para que «npx skills update» no la reinstale.
+Enlaces que se recrearán al activarla:
+  ~/.config/devin/skills/domain-driven-design → ../../../.agents/skills/domain-driven-design
+  ~/.factory/skills/domain-driven-design → ../../.agents/skills/domain-driven-design
+  ~/.junie/skills/domain-driven-design → ../../.agents/skills/domain-driven-design
+  ~/.kilocode/skills/domain-driven-design → ../../.agents/skills/domain-driven-design
+  ~/.kiro/skills/domain-driven-design → ../../.agents/skills/domain-driven-design
+Skill git-guardrails-claude-code:
+Carpeta: ~/.agents/skills/OFF/git-guardrails-claude-code → ~/.agents/.skillhub/disabled/git-guardrails-claude-code
+Enlaces que se quitan:
+  ~/.claude/skills/OFF/git-guardrails-claude-code → ../../../.agents/skills/OFF/git-guardrails-claude-code (claude-code, opencode)
+  ~/.junie/skills/git-guardrails-claude-code → ../../.agents/skills/git-guardrails-claude-code (junie) [roto]
+  ~/.kilocode/skills/git-guardrails-claude-code → ../../.agents/skills/git-guardrails-claude-code (kilo) [roto]
+  ~/.kiro/skills/git-guardrails-claude-code → ../../.agents/skills/git-guardrails-claude-code (kiro-cli) [roto]
+Su entrada del lock se aparca junto con la carpeta, para que «npx skills update» no la reinstale.
+Enlaces que se recrearán al activarla:
+  ~/.junie/skills/git-guardrails-claude-code → ../../.agents/skills/git-guardrails-claude-code
+  ~/.kilocode/skills/git-guardrails-claude-code → ../../.agents/skills/git-guardrails-claude-code
+  ~/.kiro/skills/git-guardrails-claude-code → ../../.agents/skills/git-guardrails-claude-code
+Skill web-quality-audit:
+Carpeta: ~/.agents/skills/OFF/web-quality-audit → ~/.agents/.skillhub/disabled/web-quality-audit
+Enlaces que se quitan:
+  ~/.claude/skills/OFF/web-quality-audit → ../../../.agents/skills/OFF/web-quality-audit (claude-code, opencode)
+  ~/.config/devin/skills/web-quality-audit → ../../../.agents/skills/web-quality-audit (devin) [roto]
+  ~/.kilocode/skills/web-quality-audit → ../../.agents/skills/web-quality-audit (kilo) [roto]
+  ~/.kiro/skills/web-quality-audit → ../../.agents/skills/web-quality-audit (kiro-cli) [roto]
+  ~/.pi/agent/skills/web-quality-audit → ../../../.agents/skills/web-quality-audit (pi) [roto]
+  ~/.qwen/skills/web-quality-audit → ../../.agents/skills/web-quality-audit (qwen-code) [roto]
+Su entrada del lock se aparca junto con la carpeta, para que «npx skills update» no la reinstale.
+Enlaces que se recrearán al activarla:
+  ~/.config/devin/skills/web-quality-audit → ../../../.agents/skills/web-quality-audit
+  ~/.kilocode/skills/web-quality-audit → ../../.agents/skills/web-quality-audit
+  ~/.kiro/skills/web-quality-audit → ../../.agents/skills/web-quality-audit
+  ~/.pi/agent/skills/web-quality-audit → ../../../.agents/skills/web-quality-audit
+  ~/.qwen/skills/web-quality-audit → ../../.agents/skills/web-quality-audit
+No se tocan:
+  ~/.agents/skills/OFF/README.md
+Destinos: claude-code, devin, droid, junie, kilo, kiro-cli, opencode, pi, qwen-code
+Pasos:
+  1. quitar el enlace ~/.claude/skills/OFF/accessibility (→ ../../../.agents/skills/OFF/accessibility)
+  2. quitar el enlace ~/.factory/skills/accessibility (→ ../../.agents/skills/accessibility)
+  3. quitar el enlace ~/.junie/skills/accessibility (→ ../../.agents/skills/accessibility)
+  4. quitar el enlace ~/.kilocode/skills/accessibility (→ ../../.agents/skills/accessibility)
+  5. quitar el enlace ~/.kiro/skills/accessibility (→ ../../.agents/skills/accessibility)
+  6. quitar el enlace ~/.pi/agent/skills/accessibility (→ ../../../.agents/skills/accessibility)
+  7. quitar el enlace ~/.qwen/skills/accessibility (→ ../../.agents/skills/accessibility)
+  8. mover ~/.agents/skills/OFF/accessibility a ~/.agents/.skillhub/disabled/accessibility
+  9. aparcar la entrada «accessibility» del lock
+  10. quitar el enlace ~/.claude/skills/OFF/domain-driven-design (→ ../../../.agents/skills/OFF/domain-driven-design)
+  11. quitar el enlace ~/.config/devin/skills/domain-driven-design (→ ../../../.agents/skills/domain-driven-design)
+  12. quitar el enlace ~/.factory/skills/domain-driven-design (→ ../../.agents/skills/domain-driven-design)
+  13. quitar el enlace ~/.junie/skills/domain-driven-design (→ ../../.agents/skills/domain-driven-design)
+  14. quitar el enlace ~/.kilocode/skills/domain-driven-design (→ ../../.agents/skills/domain-driven-design)
+  15. quitar el enlace ~/.kiro/skills/domain-driven-design (→ ../../.agents/skills/domain-driven-design)
+  16. mover ~/.agents/skills/OFF/domain-driven-design a ~/.agents/.skillhub/disabled/domain-driven-design
+  17. aparcar la entrada «domain-driven-design» del lock
+  18. quitar el enlace ~/.claude/skills/OFF/git-guardrails-claude-code (→ ../../../.agents/skills/OFF/git-guardrails-claude-code)
+  19. quitar el enlace ~/.junie/skills/git-guardrails-claude-code (→ ../../.agents/skills/git-guardrails-claude-code)
+  20. quitar el enlace ~/.kilocode/skills/git-guardrails-claude-code (→ ../../.agents/skills/git-guardrails-claude-code)
+  21. quitar el enlace ~/.kiro/skills/git-guardrails-claude-code (→ ../../.agents/skills/git-guardrails-claude-code)
+  22. mover ~/.agents/skills/OFF/git-guardrails-claude-code a ~/.agents/.skillhub/disabled/git-guardrails-claude-code
+  23. aparcar la entrada «git-guardrails-claude-code» del lock
+  24. quitar el enlace ~/.claude/skills/OFF/web-quality-audit (→ ../../../.agents/skills/OFF/web-quality-audit)
+  25. quitar el enlace ~/.config/devin/skills/web-quality-audit (→ ../../../.agents/skills/web-quality-audit)
+  26. quitar el enlace ~/.kilocode/skills/web-quality-audit (→ ../../.agents/skills/web-quality-audit)
+  27. quitar el enlace ~/.kiro/skills/web-quality-audit (→ ../../.agents/skills/web-quality-audit)
+  28. quitar el enlace ~/.pi/agent/skills/web-quality-audit (→ ../../../.agents/skills/web-quality-audit)
+  29. quitar el enlace ~/.qwen/skills/web-quality-audit (→ ../../.agents/skills/web-quality-audit)
+  30. mover ~/.agents/skills/OFF/web-quality-audit a ~/.agents/.skillhub/disabled/web-quality-audit
+  31. aparcar la entrada «web-quality-audit» del lock
+Después, recarga las skills en: claude-code, codex, cursor, devin, droid, gemini-cli, github-copilot, junie, kilo, kiro-cli, opencode, pi, qwen-code
+Identificador del plan: <plan>
+Para aprobarlo sin preguntar, vuelve a ejecutar el comando con --yes --plan <plan>
+Simulación: no se cambió nada.
+--- stderr ---

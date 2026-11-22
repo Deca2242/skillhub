@@ -1,0 +1,30 @@
+skillhub   1 Skills (17)  2 Actualizar  3 Instalar  4 Salud (26)
+17 skills · 13 activas · 4 desactivadas · 0 con actualización · 11 con problemas
+╭──────────────────────────────────────────────────────────────────────────────╮
+│ Skills (17)
+│ ⚠ accessibility                                                  enlace roto
+│ ● agent-browser                                                  sin revisar
+│ ● archify                                                        sin revisar
+│ ⚠ brainstorming                                                sin gestionar
+│ ⚠ computer-use                                                    modificada
+│ ⚠ domain-driven-design                                           enlace roto
+│ ● find-skills                                                    sin revisar
+│ ⚠ git-guardrails-claude-code                                     enlace roto
+│ ● grill-me                                                       sin revisar
+│ ● grill-with-docs                                                sin revisar
+│ ⚠ humanizer                                                    sin gestionar
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭──────────────────────────────────────────────────────────────────────────────╮
+│ agent-browser
+│ agent-browser
+│
+│ Disponible en: Claude Code, Codex, Cursor, Droid, Gemini CLI, GitHub
+│ Copilot, Kilo Code, OpenCode y Pi
+│ Origen: owner/agent-browser
+│
+│ [d] Desactivar   [e] Eliminar
+│ [l] Elegir agentes   [x] Ignorar
+│ [enter] Ver todo
+╰──────────────────────────────────────────────────────────────────────────────╯
+d desactivar • e eliminar • l elegir agentes • enter ver todo • x ignorar • /
+buscar • f filtrar • g ver por agente • ? ayuda • q salir

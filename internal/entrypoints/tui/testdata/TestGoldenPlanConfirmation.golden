@@ -1,0 +1,40 @@
+skillhub   1 Skills (17)  2 Actualizar  3 Instalar  4 Salud (26)   h historial • c ajustes
+╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ ¿Desactivar agent-browser?
+│ Dejará de estar disponible en Claude Code, Codex, Cursor, Droid, Gemini CLI, GitHub Copilot, Kilo Code, OpenCode y Pi.
+│ No se borra nada: la puedes volver a activar con [a].
+│ Después, recarga las skills en esos agentes.
+│                                                                                                                                                                                                                                                                                                                                                                         [s] Sí  [n] No  [v] Ocultar detalles
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ Plan: Desactivar agent-browser en todos sus destinos gestionados
+│ Carpeta: ~/.agents/skills/agent-browser → ~/.agents/.skillhub/disabled/agent-browser
+│ Enlaces que se quitan:
+│   ~/.claude/skills/agent-browser → ../../.agents/skills/agent-browser (claude-code, opencode)
+│ Su entrada del lock se aparca junto con la carpeta, para que «npx skills update» no la reinstale.
+│ Enlaces que se recrearán al activarla:
+│   ~/.claude/skills/agent-browser → ../../.agents/skills/agent-browser
+│ Destinos: claude-code, opencode
+│ Pasos:
+│   1. quitar el enlace ~/.claude/skills/agent-browser (→ ../../.agents/skills/agent-browser)
+│   2. mover ~/.agents/skills/agent-browser a ~/.agents/.skillhub/disabled/agent-browser
+│   3. aparcar la entrada «agent-browser» del lock
+│ Después, recarga las skills en: claude-code, codex, cursor, droid, gemini-cli, github-copilot, kilo, opencode, pi
+│
+│ Identificador del plan: <plan>
+│
+│
+│
+│
+│
+│
+│
+│
+│
+│
+│
+│
+│
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+Detalle técnico: ↑/↓ desplazar • v ocultar detalles
+esc no • ↑/↓ desplazar el detalle

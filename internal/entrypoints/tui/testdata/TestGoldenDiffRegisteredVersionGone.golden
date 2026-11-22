@@ -1,0 +1,27 @@
+[1mskillhub[m   1 Skills (1)  [1;4;4m2[m[4m [m[1;4;4mA[m[1;4;4mc[m[1;4;4mt[m[1;4;4mu[m[1;4;4ma[m[1;4;4ml[m[1;4;4mi[m[1;4;4mz[m[1;4;4ma[m[1;4;4mr[m[4m [m[1;4;4m([m[1;4;4m1[m[1;4;4m)[m  3 Instalar  4 Salud   [2mh historial • c ajustes[m
+╭──────────────────────────────────────────────────────────────────────────────────────────────────╮
+│                                                                                                  │
+│  Destino: lock:gamma                                                                             │
+│  Candidato: b0f229502b6d61f2                                                                     │
+│  De c3a5a3bd4a a commit 94f9f8168b (árbol d19246e081)                                            │
+│  Etiquetas: modificada localmente                                                                │
+│  Vista: instalada → upstream                                                                     │
+│                                                                                                  │
+│  La versión registrada ya no está en upstream:                                                   │
+│  solo se muestra el diff de instalada a upstream.                                                │
+│                                                                                                  │
+│  Esta skill tiene cambios locales: aplicar la actualización                                      │
+│  los reemplaza con la versión del autor.                                                         │
+│                                                                                                  │
+│  Archivos:                                                                                       │
+│    modificado  SKILL.md                                                                          │
+│                                                                                                  │
+│  --- a/SKILL.md                                                                                  │
+│  +++ b/SKILL.md                                                                                  │
+│  @@ -1,3 +1,2 @@                                                                                 │
+│  -# Gamma v1                                                                                     │
+│  +# Gamma v2                                                                                     │
+│                                                                                                  │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+[2m↑/↓ desplazar • a aplicar esta • o omitir esta versión • esc volver[m                                 
+ Cargando diff...                                                                                   

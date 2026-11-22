@@ -1,0 +1,3 @@
+$ skillhub skills remove grill-me --yes
+--- stderr ---
+skillhub: --yes necesita --plan <id>, el identificador de un plan que viste: ejecuta el mismo comando con --dry-run para ver el plan y su identificador, y vuelve a ejecutarlo con --yes --plan <id>; no se cambió nada

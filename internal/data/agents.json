@@ -1,0 +1,565 @@
+{
+  "source": {
+    "package": "skills",
+    "version": "1.9.0",
+    "file": "node_modules/skills/docs/agents.md",
+    "section": "<!-- supported-agents:start --> ... <!-- supported-agents:end -->",
+    "captured": "2026-11-21",
+    "method": "Read from the documented table without running getSupportedAgents(); one entry per --agent id, project-only agents left out.",
+    "project_only_skipped": [
+      "eve",
+      "promptscript"
+    ],
+    "v2_facts": "docs/research/harnesses-v2.md (2026-11-22): reads_store, link_dir, read_roots and follows_links are set only where that file verifies them; every other value is derived or unknown."
+  },
+  "agents": [
+    {
+      "id": "aider-desk",
+      "name": "AiderDesk",
+      "global_dir": ".aider-desk/skills",
+      "reads_universal": false
+    },
+    {
+      "id": "amp",
+      "name": "Amp",
+      "global_dir": ".config/agents/skills",
+      "reads_universal": false,
+      "reads_store": "yes"
+    },
+    {
+      "id": "replit",
+      "name": "Replit",
+      "global_dir": ".config/agents/skills",
+      "reads_universal": false
+    },
+    {
+      "id": "universal",
+      "name": "Universal",
+      "global_dir": ".config/agents/skills",
+      "reads_universal": false
+    },
+    {
+      "id": "antigravity",
+      "name": "Antigravity",
+      "global_dir": ".gemini/config/skills",
+      "reads_universal": false,
+      "reads_store": "no"
+    },
+    {
+      "id": "antigravity-cli",
+      "name": "Antigravity CLI",
+      "global_dir": ".gemini/config/skills",
+      "reads_universal": false,
+      "reads_store": "no"
+    },
+    {
+      "id": "astrbot",
+      "name": "AstrBot",
+      "global_dir": ".astrbot/data/skills",
+      "reads_universal": false
+    },
+    {
+      "id": "autohand-code",
+      "name": "Autohand Code CLI",
+      "global_dir": ".autohand/skills",
+      "reads_universal": false
+    },
+    {
+      "id": "augment",
+      "name": "Augment",
+      "global_dir": ".augment/skills",
+      "reads_universal": false
+    },
+    {
+      "id": "bob",
+      "name": "IBM Bob",
+      "global_dir": ".bob/skills",
+      "reads_universal": false
+    },
+    {
+      "id": "claude-code",
+      "name": "Claude Code",
+      "global_dir": ".claude/skills",
+      "reads_universal": false,
+      "reads_store": "no",
+      "read_roots": [
+        {
+          "dir": ".claude/skills",
+          "depth": 1
+        }
+      ],
+      "follows_links": "yes"
+    },
+    {
+      "id": "openclaw",
+      "name": "OpenClaw",
+      "global_dir": ".openclaw/skills",
+      "reads_universal": false
+    },
+    {
+      "id": "cline",
+      "name": "Cline",
+      "global_dir": ".agents/skills",
+      "reads_universal": true,
+      "reads_store": "yes"
+    },
+    {
+      "id": "codex",
+      "name": "Codex",
+      "global_dir": ".agents/skills",
+      "reads_universal": true,
+      "reads_store": "yes",
+      "read_roots": [
+        {
+          "dir": ".agents/skills",
+          "depth": 6
+        },
+        {
+          "dir": ".codex/skills",
+          "depth": "unknown"
+        }
+      ],
+      "follows_links": "yes"
+    },
+    {
+      "id": "dexto",
+      "name": "Dexto",
+      "global_dir": ".agents/skills",
+      "reads_universal": true
+    },
+    {
+      "id": "fx",
+      "name": "fx",
+      "global_dir": ".agents/skills",
+      "reads_universal": true
+    },
+    {
+      "id": "kimi-code-cli",
+      "name": "Kimi Code CLI",
+      "global_dir": ".agents/skills",
+      "reads_universal": true
+    },
+    {
+      "id": "loaf",
+      "name": "Loaf",
+      "global_dir": ".agents/skills",
+      "reads_universal": true
+    },
+    {
+      "id": "pi",
+      "name": "Pi",
+      "global_dir": ".agents/skills",
+      "reads_universal": true,
+      "reads_store": "yes",
+      "read_roots": [
+        {
+          "dir": ".pi/agent/skills",
+          "depth": "unlimited"
+        },
+        {
+          "dir": ".agents/skills",
+          "depth": "unlimited"
+        }
+      ],
+      "follows_links": "yes"
+    },
+    {
+      "id": "sarvam-code",
+      "name": "Sarvam Code",
+      "global_dir": ".agents/skills",
+      "reads_universal": true
+    },
+    {
+      "id": "warp",
+      "name": "Warp",
+      "global_dir": ".agents/skills",
+      "reads_universal": true,
+      "reads_store": "yes"
+    },
+    {
+      "id": "zed",
+      "name": "Zed",
+      "global_dir": ".agents/skills",
+      "reads_universal": true,
+      "reads_store": "yes"
+    },
+    {
+      "id": "codearts-agent",
+      "name": "CodeArts Agent",
+      "global_dir": ".codeartsdoer/skills",
+      "reads_universal": false
+    },
+    {
+      "id": "codebuddy",
+      "name": "CodeBuddy",
+      "global_dir": ".codebuddy/skills",
+      "reads_universal": false
+    },
+    {
+      "id": "codemaker",
+      "name": "Codemaker",
+      "global_dir": ".codemaker/skills",
+      "reads_universal": false
+    },
+    {
+      "id": "codestudio",
+      "name": "Code Studio",
+      "global_dir": ".codestudio/skills",
+      "reads_universal": false
+    },
+    {
+      "id": "command-code",
+      "name": "Command Code",
+      "global_dir": ".commandcode/skills",
+      "reads_universal": false
+    },
+    {
+      "id": "continue",
+      "name": "Continue",
+      "global_dir": ".continue/skills",
+      "reads_universal": false
+    },
+    {
+      "id": "cortex",
+      "name": "Cortex Code",
+      "global_dir": ".snowflake/cortex/skills",
+      "reads_universal": false
+    },
+    {
+      "id": "crush",
+      "name": "Crush",
+      "global_dir": ".config/crush/skills",
+      "reads_universal": false
+    },
+    {
+      "id": "cursor",
+      "name": "Cursor",
+      "global_dir": ".cursor/skills",
+      "reads_universal": false,
+      "reads_store": "yes"
+    },
+    {
+      "id": "deepagents",
+      "name": "Deep Agents",
+      "global_dir": ".deepagents/agent/skills",
+      "reads_universal": false
+    },
+    {
+      "id": "devin",
+      "name": "Devin for Terminal",
+      "global_dir": ".config/devin/skills",
+      "reads_universal": false,
+      "reads_store": "no"
+    },
+    {
+      "id": "droid",
+      "name": "Droid",
+      "global_dir": ".factory/skills",
+      "reads_universal": false,
+      "reads_store": "yes"
+    },
+    {
+      "id": "firebender",
+      "name": "Firebender",
+      "global_dir": ".firebender/skills",
+      "reads_universal": false
+    },
+    {
+      "id": "forgecode",
+      "name": "ForgeCode",
+      "global_dir": ".forge/skills",
+      "reads_universal": false
+    },
+    {
+      "id": "gemini-cli",
+      "name": "Gemini CLI",
+      "global_dir": ".gemini/skills",
+      "reads_universal": false,
+      "reads_store": "yes",
+      "read_roots": [
+        {
+          "dir": ".gemini/skills",
+          "depth": 1
+        },
+        {
+          "dir": ".agents/skills",
+          "depth": 1
+        }
+      ]
+    },
+    {
+      "id": "github-copilot",
+      "name": "GitHub Copilot",
+      "global_dir": ".copilot/skills",
+      "reads_universal": false,
+      "reads_store": "yes"
+    },
+    {
+      "id": "goose",
+      "name": "Goose",
+      "global_dir": ".config/goose/skills",
+      "reads_universal": false
+    },
+    {
+      "id": "grok",
+      "name": "Grok Build",
+      "global_dir": ".grok/skills",
+      "reads_universal": false
+    },
+    {
+      "id": "hermes-agent",
+      "name": "Hermes Agent",
+      "global_dir": ".hermes/skills",
+      "reads_universal": false
+    },
+    {
+      "id": "inference-sh",
+      "name": "inference.sh",
+      "global_dir": ".inferencesh/skills",
+      "reads_universal": false
+    },
+    {
+      "id": "jazz",
+      "name": "Jazz",
+      "global_dir": ".jazz/skills",
+      "reads_universal": false
+    },
+    {
+      "id": "junie",
+      "name": "Junie",
+      "global_dir": ".junie/skills",
+      "reads_universal": false,
+      "reads_store": "no"
+    },
+    {
+      "id": "iflow-cli",
+      "name": "iFlow CLI",
+      "global_dir": ".iflow/skills",
+      "reads_universal": false
+    },
+    {
+      "id": "kilo",
+      "name": "Kilo Code",
+      "global_dir": ".kilo/skills",
+      "reads_universal": false,
+      "reads_store": "yes"
+    },
+    {
+      "id": "kimchi",
+      "name": "Kimchi",
+      "global_dir": ".config/kimchi/harness/skills",
+      "reads_universal": false
+    },
+    {
+      "id": "kiro-cli",
+      "name": "Kiro CLI",
+      "global_dir": ".kiro/skills",
+      "reads_universal": false,
+      "reads_store": "no"
+    },
+    {
+      "id": "kode",
+      "name": "Kode",
+      "global_dir": ".kode/skills",
+      "reads_universal": false
+    },
+    {
+      "id": "lingma",
+      "name": "Lingma",
+      "global_dir": ".lingma/skills",
+      "reads_universal": false
+    },
+    {
+      "id": "mcpjam",
+      "name": "MCPJam",
+      "global_dir": ".mcpjam/skills",
+      "reads_universal": false
+    },
+    {
+      "id": "minimax-code",
+      "name": "MiniMax Code",
+      "global_dir": ".minimax/skills",
+      "reads_universal": false
+    },
+    {
+      "id": "mistral-vibe",
+      "name": "Mistral Vibe",
+      "global_dir": ".vibe/skills",
+      "reads_universal": false
+    },
+    {
+      "id": "moxby",
+      "name": "Moxby",
+      "global_dir": ".moxby/skills",
+      "reads_universal": false
+    },
+    {
+      "id": "mux",
+      "name": "Mux",
+      "global_dir": ".mux/skills",
+      "reads_universal": false
+    },
+    {
+      "id": "opencode",
+      "name": "OpenCode",
+      "global_dir": ".config/opencode/skills",
+      "reads_universal": false,
+      "reads_store": "yes",
+      "read_roots": [
+        {
+          "dir": ".config/opencode/skills",
+          "depth": 6
+        },
+        {
+          "dir": ".claude/skills",
+          "depth": 6
+        },
+        {
+          "dir": ".agents/skills",
+          "depth": 6
+        }
+      ]
+    },
+    {
+      "id": "openhands",
+      "name": "OpenHands",
+      "global_dir": ".openhands/skills",
+      "reads_universal": false
+    },
+    {
+      "id": "ona",
+      "name": "Ona",
+      "global_dir": ".ona/skills",
+      "reads_universal": false
+    },
+    {
+      "id": "posit-assistant",
+      "name": "Posit Assistant",
+      "global_dir": ".posit/assistant/skills",
+      "reads_universal": false
+    },
+    {
+      "id": "qoder",
+      "name": "Qoder",
+      "global_dir": ".qoder/skills",
+      "reads_universal": false
+    },
+    {
+      "id": "qoder-cn",
+      "name": "Qoder CN",
+      "global_dir": ".qoder-cn/skills",
+      "reads_universal": false
+    },
+    {
+      "id": "qwen-code",
+      "name": "Qwen Code",
+      "global_dir": ".qwen/skills",
+      "reads_universal": false,
+      "reads_store": "no"
+    },
+    {
+      "id": "reasonix",
+      "name": "Reasonix",
+      "global_dir": ".reasonix/skills",
+      "reads_universal": false
+    },
+    {
+      "id": "rovodev",
+      "name": "Rovo Dev",
+      "global_dir": ".rovodev/skills",
+      "reads_universal": false
+    },
+    {
+      "id": "roo",
+      "name": "Roo Code",
+      "global_dir": ".roo/skills",
+      "reads_universal": false
+    },
+    {
+      "id": "tabnine-cli",
+      "name": "Tabnine CLI",
+      "global_dir": ".tabnine/agent/skills",
+      "reads_universal": false
+    },
+    {
+      "id": "terramind",
+      "name": "Terramind",
+      "global_dir": ".terramind/skills",
+      "reads_universal": false
+    },
+    {
+      "id": "tinycloud",
+      "name": "Tinycloud",
+      "global_dir": ".tinycloud/skills",
+      "reads_universal": false
+    },
+    {
+      "id": "trae",
+      "name": "Trae",
+      "global_dir": ".trae/skills",
+      "reads_universal": false
+    },
+    {
+      "id": "trae-cn",
+      "name": "Trae CN",
+      "global_dir": ".trae-cn/skills",
+      "reads_universal": false
+    },
+    {
+      "id": "windsurf",
+      "name": "Windsurf",
+      "global_dir": ".codeium/windsurf/skills",
+      "reads_universal": false,
+      "reads_store": "no"
+    },
+    {
+      "id": "zcode",
+      "name": "ZCode",
+      "global_dir": ".zcode/skills",
+      "reads_universal": false
+    },
+    {
+      "id": "zencoder",
+      "name": "Zencoder",
+      "global_dir": ".zencoder/skills",
+      "reads_universal": false
+    },
+    {
+      "id": "zenflow",
+      "name": "Zenflow",
+      "global_dir": ".zencoder/skills",
+      "reads_universal": false
+    },
+    {
+      "id": "neovate",
+      "name": "Neovate",
+      "global_dir": ".neovate/skills",
+      "reads_universal": false
+    },
+    {
+      "id": "pochi",
+      "name": "Pochi",
+      "global_dir": ".pochi/skills",
+      "reads_universal": false
+    },
+    {
+      "id": "adal",
+      "name": "AdaL",
+      "global_dir": ".adal/skills",
+      "reads_universal": false
+    }
+  ],
+  "diagnostic_profiles": [
+    {
+      "id": "claude-omni",
+      "harness": "claude-code",
+      "note": "Second Claude Code profile (CLAUDE_CONFIG_DIR of ~/.local/bin/claude-omni), read only (S7 decision 6).",
+      "read_roots": [
+        {
+          "dir": ".claude-omni/skills",
+          "depth": 1
+        }
+      ]
+    }
+  ]
+}

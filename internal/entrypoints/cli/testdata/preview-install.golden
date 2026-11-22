@@ -1,0 +1,45 @@
+$ skillhub skills install acme/tools --to claude-code --dry-run
+Revisión de tidy (acme/tools, commit e8bd0c158cb3, árbol 2688a31c65ff)
+Etiquetas: permisos nuevos
+Toda instalación lleva la etiqueta «permisos nuevos»: la skill entera es nueva en esta máquina, así que cada archivo cuenta como un permiso que no tenía.
+Archivos:
+  SKILL.md	añadido 100644
+Frontmatter: description, name
+
+SKILL.md
+--- a/SKILL.md
++++ b/SKILL.md
+@@ -0,0 +1,6 @@
++---
++name: tidy
++description: tidy up
++---
++body
++second line
+
+Plan: Instalar tidy desde acme/tools
+Origen: acme/tools, commit e8bd0c158cb3, skills/tidy/SKILL.md (sigue la rama por defecto)
+Copia revisada: ~/.agents/.skillhub/staging/tidy-2688a31c65ff7d6b37569f485235ab066d2fd6f3 (árbol 2688a31c65ff) → ~/.agents/skills/tidy
+Enlaces que se crean:
+  ~/.claude/skills/tidy → ../../.agents/skills/tidy (claude-code)
+Entrada del lock que se añade:
+  {
+    "source": "acme/tools",
+    "sourceType": "github",
+    "sourceUrl": "https://github.com/acme/tools.git",
+    "commit": "e8bd0c158cb3a4498e4c94ae2db01fd1b04ed0f5",
+    "skillPath": "skills/tidy/SKILL.md",
+    "skillFolderHash": "2688a31c65ff7d6b37569f485235ab066d2fd6f3",
+    "installedAt": "2026-11-22T10:00:00.000Z",
+    "updatedAt": "2026-11-22T10:00:00.000Z"
+  }
+Destinos: claude-code
+Pasos:
+  1. mover ~/.agents/.skillhub/staging/tidy-2688a31c65ff7d6b37569f485235ab066d2fd6f3 a ~/.agents/skills/tidy
+  2. crear el enlace ~/.claude/skills/tidy → ../../.agents/skills/tidy
+  3. añadir la entrada «tidy» al lock
+Después, recarga las skills en: claude-code, codex, cursor, droid, gemini-cli, github-copilot, kilo, opencode, pi
+Identificador del plan: <plan>
+Para aprobarlo sin preguntar, vuelve a ejecutar el comando con --yes --plan <plan>
+Simulación: no se cambió nada.
+--- stderr ---

@@ -1,0 +1,40 @@
+skillhub   1 Skills (17)  2 Actualizar  3 Instalar  4 Salud (26)   h historial • c ajustes
+12 skills de gentle-ai: las gestiona gentle-ai, skillhub no las toca.
+Buscar no cambia nada: solo se repara lo que elijas y confirmes.
+╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ Hallazgos (36)                                                                                                                                               ││ Enlaces rotos (19)
+│ Enlaces rotos (19)                                                                                                                                           ││ 19 enlaces rotos: agentes que apuntan a una skill que ya no existe. Arreglo sugerido: borrar el enlace.
+│ · domain-driven-design                                                                                                                                       ││
+│ · web-quality-audit                                                                                                                                          ││ domain-driven-design
+│ · accessibility                                                                                                                                              ││ Dónde:
+│ · domain-driven-design                                                                                                                                       ││   ~/.config/devin/skills/domain-driven-design
+│ · accessibility                                                                                                                                              ││ Hallazgo: broken_link:.config/devin/skills/domain-driven-design
+│ · domain-driven-design                                                                                                                                       ││
+│ · git-guardrails-claude-code                                                                                                                                 ││ [enter] Ver cómo repararlo
+│ · accessibility                                                                                                                                              ││
+│ · domain-driven-design                                                                                                                                       ││
+│ · git-guardrails-claude-code                                                                                                                                 ││
+│ · web-quality-audit                                                                                                                                          ││
+│ · accessibility                                                                                                                                              ││
+│ · domain-driven-design                                                                                                                                       ││
+│ · git-guardrails-claude-code                                                                                                                                 ││
+│ · web-quality-audit                                                                                                                                          ││
+│ · accessibility                                                                                                                                              ││
+│ · web-quality-audit                                                                                                                                          ││
+│ · accessibility                                                                                                                                              ││
+│ · web-quality-audit                                                                                                                                          ││
+│ Apagadas pero visibles (4)                                                                                                                                   ││
+│ · lock:accessibility                                                                                                                    Codex, OpenCode y Pi ││
+│ · lock:domain-driven-design                                                                                                             Codex, OpenCode y Pi ││
+│ · lock:git-guardrails-claude-code                                                                                                       Codex, OpenCode y Pi ││
+│ · lock:web-quality-audit                                                                                                                Codex, OpenCode y Pi ││
+│ Skills sin gestionar (2)                                                                                                                                     ││
+│ · dir:.claude/skills/humanizer                                                                                                                               ││
+│ · dir:.codex/skills/brainstorming                                                                                                                            ││
+│ Copias sin original (1)                                                                                                                                      ││
+│ · dir:.copilot/skills/requirements-elicitation                                                                                                               ││
+│ Nombres repetidos (9)                                                                                                                                        ││
+│ · accessibility                                                                                                                                              ││
+│ · domain-driven-design                                                                                                                                       ││
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+enter ver cómo repararlo • r revisar ahora • ? ayuda • q salir

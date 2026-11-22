@@ -1,0 +1,13 @@
+$ skillhub skills unlink archify --from claude-code --dry-run
+Plan: Quitar el enlace de archify en claude-code
+Enlaces que se quitan:
+  ~/.claude/skills/archify → ../../.agents/skills/archify (claude-code, opencode)
+Comparten ese directorio, y también ven el cambio: opencode
+Destinos: claude-code
+Pasos:
+  1. quitar el enlace ~/.claude/skills/archify (→ ../../.agents/skills/archify)
+Después, recarga las skills en: claude-code, opencode
+Identificador del plan: <plan>
+Para aprobarlo sin preguntar, vuelve a ejecutar el comando con --yes --plan <plan>
+Simulación: no se cambió nada.
+--- stderr ---

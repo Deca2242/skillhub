@@ -1,0 +1,30 @@
+skillhub   1 Skills (17)  2 Actualizar  3 Instalar  4 Salud (26)  Historial
+╭──────────────────────────────────────────────────────────────────────────────╮
+│ Historial (1)
+│ Desactivaste agent-browser — hace un momento — se puede deshacer [u]
+│
+│
+│
+│
+│
+│
+│
+│
+│
+│
+│
+│
+│
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭──────────────────────────────────────────────────────────────────────────────╮
+│ Desactivaste agent-browser
+│ Cuándo: 2026-11-22 10:00 (hace un momento)
+│ Operación: v2:disable
+│ Snapshot: <snapshot>
+│ Detalle:
+│   plan=<plan>
+│   snapshot_sha=<sha>
+│
+│ [u] Deshacer
+╰──────────────────────────────────────────────────────────────────────────────╯
+u deshacer • r revisar ahora • ? ayuda • q salir

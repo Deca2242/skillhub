@@ -1,0 +1,30 @@
+skillhub   1 Skills (17)  2 Actualizar  3 Instalar  4 Salud (26)
+17 skills · 12 activas · 5 desactivadas · 0 con actualización · 11 con problemas
+╭──────────────────────────────────────────────────────────────────────────────╮
+│ Skills (17)
+│ ⚠ accessibility                                                  enlace roto
+│ ● agent-browser                                                  sin revisar
+│ ⚠ brainstorming                                                sin gestionar
+│ ⚠ computer-use                                                    modificada
+│ ⚠ domain-driven-design                                           enlace roto
+│ ● find-skills                                                    sin revisar
+│ ⚠ git-guardrails-claude-code                                     enlace roto
+│ ● grill-me                                                       sin revisar
+│ ● grill-with-docs                                                sin revisar
+│ ⚠ humanizer                                                    sin gestionar
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭──────────────────────────────────────────────────────────────────────────────╮
+│ accessibility
+│ La desactivaste a mano moviéndola a OFF/, pero Codex, OpenCode y Pi la
+│ siguen viendo porque buscan en subcarpetas.
+│ Recomendado: [o] Desactivarla de verdad
+│
+│ accessibility
+│
+│ Disponible en: Codex, OpenCode y Pi
+│ Origen: owner/accessibility
+│ Tiene un enlace que no lleva a ninguna parte.
+│ Desactivarla de verdad la guarda aparte, donde ningún agente la ve, junto
+╰──────────────────────────────────────────────────────────────────────────────╯
+o desactivarla de verdad • enter ver todo • x ignorar • / buscar • f filtrar • g
+ver por agente • ? ayuda • q salir

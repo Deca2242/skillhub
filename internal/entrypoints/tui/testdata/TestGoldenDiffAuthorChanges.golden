@@ -1,0 +1,27 @@
+[1mskillhub[m   1 Skills (1)  [1;4;4m2[m[4m [m[1;4;4mA[m[1;4;4mc[m[1;4;4mt[m[1;4;4mu[m[1;4;4ma[m[1;4;4ml[m[1;4;4mi[m[1;4;4mz[m[1;4;4ma[m[1;4;4mr[m[4m [m[1;4;4m([m[1;4;4m1[m[1;4;4m)[m  3 Instalar  4 Salud   [2mh historial • c ajustes[m
+╭──────────────────────────────────────────────────────────────────────────────────────────────────╮
+│                                                                                                  │
+│  Destino: lock:gamma                                                                             │
+│  Candidato: b0f229502b6d61f2                                                                     │
+│  De c3a5a3bd4a a commit b8c6b93688 (árbol d19246e081)                                            │
+│  Etiquetas: modificada localmente                                                                │
+│  Vista: Cambios del autor (registrada → upstream)                                                │
+│  v: Tus cambios (registrada → instalada)                                                         │
+│                                                                                                  │
+│  Esta skill tiene cambios locales: aplicar la actualización                                      │
+│  los reemplaza con la versión del autor.                                                         │
+│                                                                                                  │
+│  Archivos:                                                                                       │
+│    modificado  SKILL.md                                                                          │
+│                                                                                                  │
+│  --- a/SKILL.md                                                                                  │
+│  +++ b/SKILL.md                                                                                  │
+│  @@ -1,2 +1,2 @@                                                                                 │
+│  -# Gamma v1                                                                                     │
+│  +# Gamma v2                                                                                     │
+│   shared                                                                                         │
+│                                                                                                  │
+│                                                                                                  │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+[2m↑/↓ desplazar • v cambiar vista • a aplicar esta • o omitir esta versión • esc volver[m               
+ Cargando diff...                                                                                   

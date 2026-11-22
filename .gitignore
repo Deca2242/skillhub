@@ -1,0 +1,21 @@
+bin/
+*.test
+*.out
+.codegraph/
+.atl/
+
+# Local agent settings, secrets and editor files
+.claude/settings.local.json
+.env*
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Private development files: they stay in the private branches and never go public
+/CLAUDE.md
+/START-HERE.md
+/odd/
+/docs/
+/.claude/
+/skills-lock.json

@@ -1,0 +1,12 @@
+$ skillhub doctor fix broken_link:.claude/skills/ghost --dry-run
+Plan: Reparar broken_link:.claude/skills/ghost: borrar el enlace
+Enlaces que se quitan:
+  ~/.claude/skills/ghost → ../../.agents/skills/ghost (claude-code, opencode) [roto]
+Destinos: claude-code, opencode
+Pasos:
+  1. quitar el enlace ~/.claude/skills/ghost (→ ../../.agents/skills/ghost)
+Después, recarga las skills en: claude-code, opencode
+Identificador del plan: <plan>
+Para aprobarlo sin preguntar, vuelve a ejecutar el comando con --yes --plan <plan>
+Simulación: no se cambió nada.
+--- stderr ---

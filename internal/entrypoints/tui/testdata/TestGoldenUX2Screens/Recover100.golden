@@ -1,0 +1,12 @@
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃                                                                                                  ┃
+┃  Operación interrumpida detectada                                                                ┃
+┃                                                                                                  ┃
+┃  Hay una operación de gestión de skills sin terminar.                                            ┃
+┃  Recuperarla la revierte si no llegó a completarse,                                              ┃
+┃  o termina de cerrarla si ya se había completado.                                                ┃
+┃  La TUI nunca la resuelve sola.                                                                  ┃
+┃                                                                                                  ┃
+┃  Pulsa r o enter para recuperarla, o q para salir.                                               ┃
+┃                                                                                                  ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛

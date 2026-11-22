@@ -1,0 +1,28 @@
+$ skillhub skills disable i-have-adhd --dry-run
+Plan: Desactivar i-have-adhd en todos sus destinos gestionados
+Carpeta: ~/.agents/skills/i-have-adhd → ~/.agents/.skillhub/disabled/i-have-adhd
+Enlaces que se quitan:
+  ~/.claude/skills/i-have-adhd → ../../.agents/skills/i-have-adhd (claude-code, opencode)
+  ~/.codex/skills/i-have-adhd → ../../.agents/skills/i-have-adhd (codex)
+  ~/.copilot/skills/i-have-adhd → ../../.agents/skills/i-have-adhd (github-copilot)
+  ~/.cursor/skills/i-have-adhd → ../../.agents/skills/i-have-adhd (cursor)
+  ~/.gemini/skills/i-have-adhd → ../../.agents/skills/i-have-adhd (gemini-cli)
+Enlaces que se recrearán al activarla:
+  ~/.claude/skills/i-have-adhd → ../../.agents/skills/i-have-adhd
+  ~/.codex/skills/i-have-adhd → ../../.agents/skills/i-have-adhd
+  ~/.copilot/skills/i-have-adhd → ../../.agents/skills/i-have-adhd
+  ~/.cursor/skills/i-have-adhd → ../../.agents/skills/i-have-adhd
+  ~/.gemini/skills/i-have-adhd → ../../.agents/skills/i-have-adhd
+Destinos: claude-code, codex, cursor, gemini-cli, github-copilot, opencode
+Pasos:
+  1. quitar el enlace ~/.claude/skills/i-have-adhd (→ ../../.agents/skills/i-have-adhd)
+  2. quitar el enlace ~/.codex/skills/i-have-adhd (→ ../../.agents/skills/i-have-adhd)
+  3. quitar el enlace ~/.copilot/skills/i-have-adhd (→ ../../.agents/skills/i-have-adhd)
+  4. quitar el enlace ~/.cursor/skills/i-have-adhd (→ ../../.agents/skills/i-have-adhd)
+  5. quitar el enlace ~/.gemini/skills/i-have-adhd (→ ../../.agents/skills/i-have-adhd)
+  6. mover ~/.agents/skills/i-have-adhd a ~/.agents/.skillhub/disabled/i-have-adhd
+Después, recarga las skills en: claude-code, codex, cursor, droid, gemini-cli, github-copilot, kilo, opencode, pi
+Identificador del plan: <plan>
+Para aprobarlo sin preguntar, vuelve a ejecutar el comando con --yes --plan <plan>
+Simulación: no se cambió nada.
+--- stderr ---

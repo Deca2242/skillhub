@@ -1,0 +1,49 @@
+{
+  "version": 3,
+  "skills": {
+    "find-skills": {
+      "source": "vercel-labs/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/vercel-labs/skills.git",
+      "skillPath": "skills/find-skills/SKILL.md",
+      "skillFolderHash": "1111111111111111111111111111111111111111",
+      "installedAt": "2026-10-01T08:00:00.000Z",
+      "updatedAt": "2026-10-02T08:00:00.000Z"
+    },
+    "frontend-design": {
+      "source": "anthropics/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/anthropics/skills.git",
+      "skillPath": "skills/frontend-design/SKILL.md",
+      "skillFolderHash": "2222222222222222222222222222222222222222",
+      "installedAt": "2026-10-03T09:15:30.123Z",
+      "updatedAt": "2026-10-04T09:15:30.123Z"
+    },
+    "orca-cli": {
+      "source": "stablyai/orca",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/stablyai/orca.git",
+      "skillPath": "skills/orca-cli/SKILL.md",
+      "skillFolderHash": "3333333333333333333333333333333333333333",
+      "installedAt": "2026-10-05T10:30:00.000Z",
+      "updatedAt": "2026-10-06T10:30:00.000Z"
+    },
+    "agent-browser": {
+      "source": "vercel-labs/agent-browser",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/vercel-labs/agent-browser.git",
+      "skillPath": "skills/agent-browser/SKILL.md",
+      "skillFolderHash": "4444444444444444444444444444444444444444",
+      "installedAt": "2026-10-07T11:45:00.000Z",
+      "updatedAt": "2026-10-08T11:45:00.000Z"
+    }
+  },
+  "dismissed": {
+    "findSkillsPrompt": true
+  },
+  "lastSelectedAgents": [
+    "claude-code",
+    "codex",
+    "opencode"
+  ]
+}

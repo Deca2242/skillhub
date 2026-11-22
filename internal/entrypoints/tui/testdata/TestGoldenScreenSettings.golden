@@ -1,0 +1,17 @@
+[1mskillhub[m   1 Skills (3)  2 Actualizar (2)  3 Instalar  4 Salud  [1;4;4mA[m[1;4;4mj[m[1;4;4mu[m[1;4;4ms[m[1;4;4mt[m[1;4;4me[m[1;4;4ms[m   [2mh historial • c ajustes[m
+╭──────────────────────────────────────────────────────────────────────────────────────────────────╮
+│                                                                                                  │
+│  > Intervalo de revisión:  1h0m0s                                                                │
+│      [2mCada cuánto se buscan versiones nuevas de tus skills (mínimo 15 minutos).[m                   │
+│    Notificaciones:         sí                                                                    │
+│      [2mAvisa en el escritorio cuando hay versiones nuevas; nunca instala nada.[m                     │
+│    Ignoradas:              ninguna                                                               │
+│      [2mIgnorar una skill (x en Skills) oculta la skill de skillhub; tus agentes la siguen usando.[m  │
+│      [2mCon enter eliges cuáles dejar de ignorar.[m                                                   │
+│                                                                                                  │
+│    Revisión en segundo plano: desactivada (instalada: no, activa: no)                            │
+│      [2mRevisa aunque skillhub esté cerrado; nunca aplica nada. Se activa con el comando de abajo.[m  │
+│    Comando: skillhub background enable                                                           │
+│                                                                                                  │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+[2m↑/↓ elegir • enter cambiar • r revisar ahora • ? ayuda • q salir[m                                    

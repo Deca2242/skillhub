@@ -1,0 +1,14 @@
+skillhub   1 Skills (17)  2 Actualizar  3 Instalar  4 Salud (26)
+╭──────────────────────────────────────────────────────────────────────────────╮
+│
+│  ¿Cómo lo reparo?
+│  19 enlaces rotos: agentes que apuntan a una skill que ya no existe.
+│  Arreglo sugerido: borrar el enlace.
+│
+│  domain-driven-design
+│    ~/.config/devin/skills/domain-driven-design
+│
+│  > Desactivar con skillhub las skills de OFF/
+│
+╰──────────────────────────────────────────────────────────────────────────────╯
+↑/↓ elegir • enter aceptar • esc volver

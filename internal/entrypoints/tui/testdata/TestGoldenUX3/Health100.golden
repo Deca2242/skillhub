@@ -1,0 +1,30 @@
+skillhub   1 Skills (17)  2 Actualizar  3 Instalar  4 Salud (26)   h historial • c ajustes
+12 skills de gentle-ai: las gestiona gentle-ai, skillhub no las toca.
+Buscar no cambia nada: solo se repara lo que elijas y confirmes.
+╭──────────────────────────────────────╮╭──────────────────────────────────────────────────────────╮
+│ Hallazgos (36)                       ││ Enlaces rotos (19)
+│ Enlaces rotos (19)                   ││ 19 enlaces rotos: agentes que apuntan a una skill que ya
+│ · domain-driven-desi…                ││ no existe. Arreglo sugerido: borrar el enlace.
+│ · web-quality-audit                  ││
+│ · accessibility                      ││ domain-driven-design
+│ · domain-driven-desi…                ││ Dónde:
+│ · accessibility                      ││   ~/.config/devin/skills/domain-driven-design
+│ · domain-driven-desi…                ││ Hallazgo: broken_link:.config/devin/skills/domain-
+│ · git-guardrails-cla…                ││ driven-design
+│ · accessibility                      ││
+│ · domain-driven-desi…                ││ [enter] Ver cómo repararlo
+│ · git-guardrails-cla…                ││
+│ · web-quality-audit                  ││
+│ · accessibility                      ││
+│ · domain-driven-desi…                ││
+│ · git-guardrails-cla…                ││
+│ · web-quality-audit                  ││
+│ · accessibility                      ││
+│ · web-quality-audit                  ││
+│ · accessibility                      ││
+│ · web-quality-audit                  ││
+│ Apagadas pero visibl…                ││
+│ · lock:accessibility  Codex, OpenCo… ││
+│ · lock:domain-driven… Codex, OpenCo… ││
+╰──────────────────────────────────────╯╰──────────────────────────────────────────────────────────╯
+enter ver cómo repararlo • r revisar ahora • ? ayuda • q salir

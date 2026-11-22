@@ -1,0 +1,30 @@
+skillhub   1 Skills (17)  2 Actualizar  3 Instalar  4 Salud (26)   h historial • c ajustes
+17 skills · 12 activas · 5 desactivadas · 0 con actualización · 11 con problemas
+╭──────────────────────────────────────╮╭──────────────────────────────────────────────────────────╮
+│ Skills · desactivadas (5)            ││ accessibility
+│ ⚠ accessibility          enlace roto ││ La desactivaste a mano moviéndola a OFF/, pero Codex,
+│ ⚠ domain-driven-design   enlace roto ││ OpenCode y Pi la siguen viendo porque buscan en
+│ ⚠ git-guardrails-claude… enlace roto ││ subcarpetas.
+│ ⚠ web-quality-audit      enlace roto ││ Recomendado: [o] Desactivarla de verdad
+│ ○ archify                desactivada ││
+│                                      ││ accessibility
+│                                      ││
+│                                      ││ Disponible en: Codex, OpenCode y Pi
+│                                      ││ Origen: owner/accessibility
+│                                      ││ Tiene un enlace que no lleva a ninguna parte.
+│                                      ││ Desactivarla de verdad la guarda aparte, donde ningún
+│                                      ││ agente la ve, junto con las otras 3 skills de OFF/
+│                                      ││ (domain-driven-design, git-guardrails-claude-code y web-
+│                                      ││ quality-audit).
+│                                      ││ También borra sus 6 enlaces rotos.
+│                                      ││
+│                                      ││ [x] Ignorar   [enter] Ver todo
+│                                      ││
+│                                      ││
+│                                      ││
+│                                      ││
+│                                      ││
+│                                      ││
+╰──────────────────────────────────────╯╰──────────────────────────────────────────────────────────╯
+o desactivarla de verdad • enter ver todo • x ignorar • / buscar • f filtrar • g ver por agente • ?
+ayuda • q salir

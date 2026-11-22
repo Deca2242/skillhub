@@ -1,0 +1,3 @@
+$ skillhub skills enable agent-browser --dry-run
+--- stderr ---
+skillhub: «agent-browser» no puede volver todavía a su posición en el lock: su vecina archify también está desactivada, y las entradas vuelven en el orden inverso al que salieron. Activa primero archify con «skillhub skills enable archify»

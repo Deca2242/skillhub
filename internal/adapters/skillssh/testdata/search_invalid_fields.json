@@ -1,0 +1,18 @@
+{"skills":[
+{"id":"good/repo/kept","source":"good/repo","skillId":"kept","name":"kept","installs":7},
+{"id":"bad/repo/negative","source":"bad/repo","skillId":"negative","name":"negative","installs":-1},
+{"id":"bad/repo/fraction","source":"bad/repo","skillId":"fraction","name":"fraction","installs":1.5},
+{"id":"bad/repo/string-installs","source":"bad/repo","skillId":"string-installs","name":"s","installs":"12"},
+{"id":"bad/repo/dotdot","source":"bad/repo","skillId":"../escape","name":"dotdot","installs":1},
+{"id":"bad/source/dotdot","source":"bad/..","skillId":"x","name":"x","installs":1},
+{"id":"bad/repo/abs","source":"/etc/passwd","skillId":"abs","name":"abs","installs":1},
+{"id":"bad/repo/abs-skill","source":"bad/repo","skillId":"/abs","name":"abs","installs":1},
+{"id":"bad/repo/ctrl","source":"bad/repo","skillId":"ctrl\u0007","name":"ctrl","installs":1},
+{"id":"bad/repo/ctrl-name","source":"bad/repo","skillId":"ctrl-name","name":"evil\u001b[31m","installs":1},
+{"id":"bad/repo/missing-source","skillId":"missing-source","name":"m","installs":1},
+{"id":"bad/repo/null-name","source":"bad/repo","skillId":"null-name","name":null,"installs":1},
+{"id":7,"source":"bad/repo","skillId":"numeric-id","name":"n","installs":1},
+{"id":"","source":"bad/repo","skillId":"empty-id","name":"e","installs":1},
+"not an object",
+{"id":"good/repo/also-kept","source":"good/repo","skillId":"also-kept","name":"Also kept","installs":3}
+]}

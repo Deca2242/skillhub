@@ -1,0 +1,21 @@
+$ skillhub skills remove orchestration --dry-run
+Plan: Eliminar orchestration
+Carpeta (activa): ~/.agents/skills/orchestration (árbol 27216565ed5b)
+Modificada localmente: sí: la carpeta difiere de lo que registra el lock; tus cambios quedan en el snapshot
+Enlaces que se quitan:
+  ~/.claude/skills/orchestration → ../../.agents/skills/orchestration (claude-code, opencode)
+  ~/.gemini/config/skills/orchestration → ../../../.agents/skills/orchestration (antigravity, antigravity-cli)
+Entrada del lock que se quita: «orchestration»
+Otras copias con el mismo nombre (no se tocan; se resuelven con «skillhub doctor»):
+  ~/.claude-omni/skills/orchestration (distinta, perfil claude-omni)
+Destinos: antigravity, antigravity-cli, claude-code, codex, cursor, droid, gemini-cli, github-copilot, kilo, opencode, pi
+Pasos:
+  1. quitar el enlace ~/.claude/skills/orchestration (→ ../../.agents/skills/orchestration)
+  2. quitar el enlace ~/.gemini/config/skills/orchestration (→ ../../../.agents/skills/orchestration)
+  3. borrar ~/.agents/skills/orchestration (queda en el snapshot)
+  4. quitar la entrada «orchestration» del lock
+Después, recarga las skills en: antigravity, antigravity-cli, claude-code, codex, cursor, droid, gemini-cli, github-copilot, kilo, opencode, pi
+Identificador del plan: <plan>
+Para aprobarlo sin preguntar, vuelve a ejecutar el comando con --yes --plan <plan>
+Simulación: no se cambió nada.
+--- stderr ---

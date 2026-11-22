@@ -1,0 +1,30 @@
+skillhub   1 Skills (17)  2 Actualizar  3 Instalar  4 Salud (26)
+12 skills de gentle-ai: las gestiona gentle-ai, skillhub no las toca.
+Buscar no cambia nada: solo se repara lo que elijas y confirmes.
+╭──────────────────────────────────────────────────────────────────────────────╮
+│ Hallazgos (36)
+│ Enlaces rotos (19)
+│ · domain-driven-design
+│ · web-quality-audit
+│ · accessibility
+│ · domain-driven-design
+│ · accessibility
+│ · domain-driven-design
+│ · git-guardrails-claude-code
+│ · accessibility
+│ · domain-driven-design
+│ · git-guardrails-claude-code
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭──────────────────────────────────────────────────────────────────────────────╮
+│ Enlaces rotos (19)
+│ 19 enlaces rotos: agentes que apuntan a una skill que ya no existe. Arreglo
+│ sugerido: borrar el enlace.
+│
+│ domain-driven-design
+│ Dónde:
+│   ~/.config/devin/skills/domain-driven-design
+│ Hallazgo: broken_link:.config/devin/skills/domain-driven-design
+│
+│ [enter] Ver cómo repararlo
+╰──────────────────────────────────────────────────────────────────────────────╯
+enter ver cómo repararlo • r revisar ahora • ? ayuda • q salir

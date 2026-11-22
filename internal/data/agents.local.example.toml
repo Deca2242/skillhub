@@ -1,0 +1,81 @@
+# Ejemplo de ~/.config/skillhub/agents.local.toml
+#
+# skillhub trae una tabla de agentes copiada de la documentación de `npx skills`
+# (internal/data/agents.json). Este archivo la corrige y la amplía para una máquina:
+#
+# - Cada tabla [[agent]] lleva `id` y `global_dir`, y opcionalmente `reads_universal`.
+# - Si el `id` ya está en la tabla, la fila corrige ese agente. Si `reads_universal` no
+#   aparece, se conserva el valor de la tabla.
+# - Si el `id` es nuevo, el agente se añade al final de la tabla.
+# - `global_dir` es relativo al home: `~/.codex/skills` o `.codex/skills`.
+# - `reads_universal = true` indica que el agente también lee `~/.agents/skills`.
+# - Una clave desconocida, un tipo incorrecto o un `id` repetido hacen que skillhub
+#   rechace el archivo y nombre la clave. Si el archivo no existe, se usa la tabla tal cual.
+#
+# Campos de la versión 2, todos opcionales (un archivo de la versión 1 sigue valiendo).
+# Atención: un binario de skillhub de la versión 1 no conoce estos campos y rechaza el
+# archivo que use alguno, nombrando la clave. Si todavía usas ese binario (por ejemplo,
+# desde el timer de la revisión en segundo plano), no los añadas hasta actualizarlo.
+# Describen cómo ve las skills cada harness. Pon solo lo que hayas comprobado: lo que no
+# se sabe se deja fuera o se escribe "unknown", y skillhub lo muestra como indeterminado.
+#
+# - `reads_store`: "yes" si el harness lee `~/.agents/skills` directamente (`npx skills`
+#   no le crea enlaces), "no" si no lo lee, "unknown" si no se sabe. Si falta, vale "yes"
+#   cuando `global_dir` es `~/.agents/skills` y "unknown" en otro caso.
+# - `link_dir`: dónde se enlaza una skill para este harness, relativo al home. Solo se
+#   admite con `reads_store = "no"`; si falta, es el `global_dir`.
+# - `follows_links`: "yes", "no" o "unknown"; si el harness carga una skill a través de
+#   un symlink. Si falta, vale "unknown".
+# - `read_roots`: los directorios que lee el harness, cada uno como una tabla
+#   [[agent.read_roots]] con `dir` (relativo al home) y `depth`:
+#     - un número desde 1: cuántos niveles baja buscando SKILL.md (1 es solo
+#       `<dir>/<skill>/SKILL.md`; con más, una carpeta como `OFF/<skill>` también se ve);
+#     - "unlimited": sin límite;
+#     - "unknown": no se sabe si lee ese directorio ni hasta dónde.
+#   Si aparece, reemplaza la lista entera. Si falta, se usan el `global_dir` y, cuando
+#   `reads_store = "yes"`, también `~/.agents/skills`, los dos con `depth = "unknown"`.
+#
+# Dos harness que leen o enlazan en un mismo directorio (como Antigravity y Antigravity CLI
+# en `~/.gemini/config/skills`) se informan como harness que comparten directorio.
+#
+# Ejemplo de una fila con todos los campos de la versión 2 (comentada: no describe un
+# harness de esta máquina):
+#
+# [[agent]]
+# id = "mi-harness"
+# global_dir = "~/.mi-harness/skills"
+# reads_store = "no"
+# link_dir = "~/.mi-harness/skills"
+# follows_links = "yes"
+#
+# [[agent.read_roots]]
+# dir = "~/.mi-harness/skills"
+# depth = 1
+#
+# [[agent.read_roots]]
+# dir = "~/.mi-harness/extra"
+# depth = "unlimited"
+#
+# Las correcciones de abajo son las de la máquina descrita en
+# docs/research/local-inventory.md (sección 1) y docs/research/skills-cli-internals.md
+# (hecho 12).
+
+# Codex guarda sus skills en ~/.codex/skills (9 carpetas reales). La documentación lo
+# ubica en ~/.agents/skills, que Codex también lee.
+[[agent]]
+id = "codex"
+global_dir = "~/.codex/skills"
+reads_universal = true
+
+# Pi vive en ~/.pi/agent; sus 5 skills son enlaces a ~/.agents/skills. La documentación
+# lo ubica en ~/.agents/skills.
+[[agent]]
+id = "pi"
+global_dir = "~/.pi/agent/skills"
+reads_universal = false
+
+# Kilo vive en ~/.kilocode; la documentación lo ubica en ~/.kilo/skills.
+[[agent]]
+id = "kilo"
+global_dir = "~/.kilocode/skills"
+reads_universal = false
