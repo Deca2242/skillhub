@@ -85,17 +85,20 @@ func (m *Model) selectedRow() (SkillRow, bool) {
 // renderSkills lays out the list and the panel in the room the header and
 // the footer leave.
 func (m *Model) renderSkills() string {
+	w := max(20, m.width)
 	c := m.counts()
-	summary := ansi.Truncate(text.TUISkillsSummary(c), max(20, m.width), "…")
+	summary := ansi.Truncate(text.TUISkillsSummary(c), w, "…")
 	if c.Ignored > 0 {
 		// The ignored count ends the line: it wraps rather than be cut (UX4).
-		summary = lipgloss.NewStyle().Width(max(20, m.width)).Render(text.TUISkillsSummary(c))
+		summary = lipgloss.NewStyle().Width(w).Render(text.TUISkillsSummary(c))
 	}
-	prefix := m.styles.muted.Render(summary) + "\n"
+	visSummary := ansi.Truncate(text.TUISkillsVisibilitySummary(m.visibilityCounts()), w, "…")
+	prefix := m.styles.muted.Render(summary) + "\n" +
+		m.styles.muted.Render(visSummary) + "\n"
 	if m.mode == modeFilter {
 		prefix += m.filterInput.View() + "\n"
 	} else if q := m.filterInput.Value(); q != "" {
-		prefix += fmt.Sprintf("Búsqueda: %s\n", q)
+		prefix += fmt.Sprintf("Búsqueda: %s\n", text.SafeLine(q))
 	}
 	if len(m.skillRows) == 0 {
 		if len(m.allRows) > 0 {
@@ -105,7 +108,7 @@ func (m *Model) renderSkills() string {
 	}
 	items := make([]listItem, 0, len(m.skillRows))
 	for _, r := range m.skillRows {
-		items = append(items, listItem{icon: r.Kind.Icon(), style: m.styles.icons[r.Kind], name: r.RawName, short: r.Short})
+		items = append(items, listItem{icon: r.Kind.Icon(), style: m.styles.icons[r.Kind], name: text.SafeLine(r.RawName), short: r.Short})
 	}
 	list := func(width, height int) []string {
 		return m.listLines(m.listTitle(), items, m.skillsTable.Cursor(), &m.listTop, width, height)
@@ -117,7 +120,7 @@ func (m *Model) renderSkills() string {
 func (m *Model) listTitle() string {
 	agent := ""
 	if m.agentFilter != "" {
-		agent = m.app.AgentName(m.agentFilter)
+		agent = text.SafeLine(m.app.AgentName(m.agentFilter))
 	}
 	return text.TUISkillsListTitle(agent, m.stateFilter, len(m.skillRows))
 }
@@ -223,14 +226,20 @@ func (m *Model) panelLines(width int) []string {
 	wrap := func(s string) []string {
 		return strings.Split(lipgloss.NewStyle().Width(width).Render(s), "\n")
 	}
-	lines := []string{m.styles.title.Render(ansi.Truncate(row.RawName, width, "…"))}
+	lines := []string{m.styles.title.Render(ansi.Truncate(text.SafeLine(row.RawName), width, "…"))}
+	if match := text.TUISearchMatch(row.MatchFields); match != "" {
+		for _, l := range wrap(match) {
+			lines = append(lines, m.styles.muted.Render(l))
+		}
+	}
 	var actions []string
 	switch {
 	case row.Ignored:
 		s, _ := m.ignoredByID(row.ID)
 		lines = append(lines, wrap(text.TUIPanelIgnored)...)
 		lines = append(lines, "")
-		lines = append(lines, m.skillLines(s, wrap)...)
+		lines = append(lines, m.skillLines(s, text.TUIStateIgnored, wrap)...)
+		lines = append(lines, m.activityLines(s, wrap)...)
 		actions = []string{text.TUIActionUnignore, text.TUIActionDetail}
 	case row.ParkedKey != "":
 		p, _ := m.parkedByKey(row.ParkedKey)
@@ -239,7 +248,15 @@ func (m *Model) panelLines(width int) []string {
 			lines = append(lines, wrap(text.TUIPanelReturnsTo(m.agentNames(p.Harnesses)))...)
 		}
 		lines = append(lines, "")
+		lines = append(lines, wrap(text.TUIPanelSkillhubState(text.TUIStateDisabled))...)
+		lines = append(lines, wrap(text.TUIPanelAvailable(text.TUIPanelNowhere))...)
 		lines = append(lines, wrap(text.TUIPanelOrigin(text.TUIPanelDisabledBy))...)
+		parkedSkill := domain.Skill{
+			ID:        domain.LockID(p.Key),
+			Name:      p.Key,
+			Locations: []domain.Location{{AgentID: domain.StoreAgentID, Path: p.Key}},
+		}
+		lines = append(lines, m.activityLines(parkedSkill, wrap)...)
 		actions = []string{text.TUIActionEnable}
 	default:
 		s, _ := m.skillByID(row.ID)
@@ -254,7 +271,11 @@ func (m *Model) panelLines(width int) []string {
 		if situation != "" || rec.key != "" {
 			lines = append(lines, "")
 		}
-		lines = append(lines, m.skillLines(s, wrap)...)
+		mgmtState := text.TUIStateActive
+		if acts.Off || s.State == domain.StateDisabled {
+			mgmtState = text.TUIStateDisabledHand
+		}
+		lines = append(lines, m.skillLines(s, mgmtState, wrap)...)
 		for _, p := range text.TUIPlainProblems(s.State, s.Issues) {
 			for _, l := range wrap(p) {
 				lines = append(lines, m.styles.problem.Render(l))
@@ -266,6 +287,7 @@ func (m *Model) panelLines(width int) []string {
 				lines = append(lines, wrap(text.TUIPanelAdoptOffLinks(len(acts.BrokenLinks)))...)
 			}
 		}
+		lines = append(lines, m.activityLines(s, wrap)...)
 		for _, a := range m.rowActions(row) {
 			if a.key != rec.key {
 				actions = append(actions, a.label)
@@ -279,16 +301,91 @@ func (m *Model) panelLines(width int) []string {
 }
 
 // skillLines are what the panel tells of every skill: its description,
-// the agents that see it and where it comes from.
-func (m *Model) skillLines(s domain.Skill, wrap func(string) []string) []string {
-	desc := s.Description
+// its management state in skillhub, the agents that see it and where it comes from.
+func (m *Model) skillLines(s domain.Skill, mgmtState string, wrap func(string) []string) []string {
+	desc := text.Safe(s.Description)
 	if desc == "" {
 		desc = text.TUIPanelNoDescription
 	}
 	lines := wrap(desc)
 	lines = append(lines, "")
+	lines = append(lines, wrap(text.TUIPanelSkillhubState(mgmtState))...)
 	lines = append(lines, wrap(text.TUIPanelAvailable(m.availableIn(s)))...)
+	lines = append(lines, m.whyVisibleLines(s.ID, wrap)...)
 	return append(lines, wrap(text.TUIPanelOrigin(origin(s)))...)
+}
+
+// activityLines formats up to panelActivityLimit recent skillhub activity
+// entries for the Skills panel, or a single line when there is none.
+const panelActivityLimit = 3
+
+func (m *Model) activityLines(s domain.Skill, wrap func(string) []string) []string {
+	entries := app.SkillActivity(m.history, m.operations, s)
+	if len(entries) == 0 {
+		return wrap(text.TUIActivityNone)
+	}
+	now := m.app.Now()
+	limit := min(len(entries), panelActivityLimit)
+	lines := wrap(text.TUIActivityHeader)
+	for _, e := range entries[:limit] {
+		lines = append(lines, wrap(text.TUIActivityLine(e, now))...)
+	}
+	return lines
+}
+
+var sightingOrder = []string{
+	app.SightingDirect,
+	app.SightingViaLink,
+	app.SightingOwnCopy,
+	app.SightingIndeterminate,
+}
+
+// whyVisibleLines formats one line per access reason, grouping agents that
+// share the same reason, without paths.
+func (m *Model) whyVisibleLines(skillID string, wrap func(string) []string) []string {
+	sgs := m.sightings[skillID]
+	if len(sgs) == 0 {
+		return nil
+	}
+	byKind := make(map[string][]string, len(sightingOrder))
+	for _, sg := range sgs {
+		name := m.app.AgentName(sg.Harness)
+		if !slices.Contains(byKind[sg.Kind], name) {
+			byKind[sg.Kind] = append(byKind[sg.Kind], name)
+		}
+	}
+	var lines []string
+	for _, kind := range sightingOrder {
+		names := byKind[kind]
+		if len(names) == 0 {
+			continue
+		}
+		slices.Sort(names)
+		line := text.TUIPanelWhyVisible(text.JoinNames(names), text.TUISightingReason(kind))
+		lines = append(lines, wrap(line)...)
+	}
+	return lines
+}
+
+// visibilityCounts counts how many skills are seen by agents vs hidden from all agents.
+func (m *Model) visibilityCounts() text.SkillVisibilityCounts {
+	var c text.SkillVisibilityCounts
+	for _, r := range m.allRows {
+		seen := len(m.seenBy(r)) > 0
+		disabled := m.disabledRow(r)
+		if seen {
+			c.Visible++
+			if disabled {
+				c.DisabledVisible++
+			}
+		} else {
+			c.Hidden++
+			if !disabled {
+				c.ActiveHidden++
+			}
+		}
+	}
+	return c
 }
 
 // actionLabel is an action "[k] Label" with its key highlighted.
@@ -339,7 +436,7 @@ func (m *Model) agentNames(ids []string) string {
 func (m *Model) agentList(ids []string) []string {
 	names := make([]string, 0, len(ids))
 	for _, id := range ids {
-		names = append(names, m.app.AgentName(id))
+		names = append(names, text.SafeLine(m.app.AgentName(id)))
 	}
 	return names
 }

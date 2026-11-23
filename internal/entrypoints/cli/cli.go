@@ -107,7 +107,11 @@ func explain(err error) string {
 	}
 	switch {
 	case errors.As(err, &amb):
-		return fmt.Sprintf(msgAmbiguous, amb.Ref) + "\n  " + strings.Join(amb.IDs, "\n  ")
+		ids := make([]string, len(amb.IDs))
+		for i, id := range amb.IDs {
+			ids[i] = text.SafeLine(id)
+		}
+		return fmt.Sprintf(msgAmbiguous, text.SafeLine(amb.Ref)) + "\n  " + strings.Join(ids, "\n  ")
 	case errors.Is(err, updates.ErrInterrupted):
 		return msgInterruptedRefuse
 	case errors.Is(err, updates.ErrV2OperationPending):
@@ -115,7 +119,7 @@ func explain(err error) string {
 	case errors.Is(err, ports.ErrStateLocked):
 		return msgStateLocked
 	default:
-		return fmt.Sprintf(msgError, err)
+		return fmt.Sprintf(msgError, text.SafeLine(fmt.Sprint(err)))
 	}
 }
 
@@ -125,7 +129,7 @@ func (r *runner) facade(warn bool) (*app.App, error) {
 	if r.app == nil {
 		a, err := r.env.NewApp()
 		if err != nil {
-			return nil, fail(msgCompose, err)
+			return nil, fail(msgCompose, text.SafeLine(fmt.Sprint(err)))
 		}
 		r.app = a
 	}
@@ -137,7 +141,7 @@ func (r *runner) facade(warn bool) (*app.App, error) {
 		}
 		if ok {
 			fmt.Fprintf(r.env.Stderr, msgInterruptedWarning,
-				opKind(op.Kind), op.Target, formatTime(op.StartedAt))
+				opKind(op.Kind), text.SafeLine(op.Target), formatTime(op.StartedAt))
 		}
 	}
 	return r.app, nil

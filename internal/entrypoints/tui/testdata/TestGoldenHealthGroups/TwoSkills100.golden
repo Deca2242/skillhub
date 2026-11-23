@@ -1,0 +1,30 @@
+skillhub   1 Skills (17)  2 Actualizar  3 Instalar  4 Salud (26)   h historial • c ajustes
+12 skills de gentle-ai: las gestiona gentle-ai, skillhub no las toca.
+Buscar no cambia nada: solo se repara lo que elijas y confirmes.
+╭──────────────────────────────────────╮╭──────────────────────────────────────────────────────────╮
+│ 21 skills afectadas · 36 hallazgos   ││ accessibility (~/.claude-omni/skills)
+│ ▸ accessibility          8 hallazgos ││
+│ ▸ domain-driven-design   7 hallazgos ││ 1 skill con nombre repetido: hay otra skill distinta que
+│ ▸ git-guardrails-claude… 5 hallazgos ││ se llama igual. Arreglo sugerido: ninguno, skillhub
+│ ▸ web-quality-audit      7 hallazgos ││ nunca las une por su nombre.
+│ ▸ brainstorming           1 hallazgo ││ También aparece en accessibility: es el mismo hallazgo,
+│ ▸ humanizer               1 hallazgo ││ no uno por cada skill.
+│ ▸ requirements-elicitat…  1 hallazgo ││ Hallazgo: homonyms:accessibility
+│ ▸ computer-use           2 hallazgos ││
+│ ▸ find-skills             1 hallazgo ││ [enter] Ver cómo repararlo   [m] Comparar
+│ ▸ grill-with-docs         1 hallazgo ││
+│ ▸ orca-cli                1 hallazgo ││
+│ ▸ orchestration           1 hallazgo ││
+│ ▾ accessibility (~/.cla…  1 hallazgo ││
+│ · nombre repetido                    ││
+│ ▸ domain-driven-design …  1 hallazgo ││
+│ ▸ find-skills (~/.claud…  1 hallazgo ││
+│ ▸ git-guardrails-claude…  1 hallazgo ││
+│ ▸ grill-with-docs (~/.c…  1 hallazgo ││
+│ ▸ orca-cli (~/.claude-o…  1 hallazgo ││
+│ ▸ orca-computer-use       1 hallazgo ││
+│ ▸ orchestration (~/.cla…  1 hallazgo ││
+│ ▸ web-quality-audit (~/…  1 hallazgo ││
+│                                      ││
+╰──────────────────────────────────────╯╰──────────────────────────────────────────────────────────╯
+enter ver cómo repararlo • m comparar • r revisar ahora • ? ayuda • q salir

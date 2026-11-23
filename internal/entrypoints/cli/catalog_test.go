@@ -68,7 +68,7 @@ func TestSkillsSearchPrintsATableAndHowToInstall(t *testing.T) {
 	want := "" +
 		"NOMBRE      ORIGEN                    INSTALACIONES  ESTADO\n" +
 		"react-best  vercel-labs/agent-skills  48 213         \n" +
-		"alpha       acme/skills               1204           instalada\n" +
+		"alpha       acme/skills               1204           instalada (acme/skills)\n" +
 		"Mintlify    mintlify.com              5              sitio web (no es GitHub)\n" +
 		"\n" +
 		"Para instalar: skillhub skills install <origen>, con owner/repo@skill para GitHub o https://sitio@skill para un sitio web\n" +
@@ -250,5 +250,59 @@ func TestSkillsSearchWithoutACatalogFails(t *testing.T) {
 	r := f.run(nil, "skills", "search", "react")
 	if r.code != 2 || !strings.Contains(r.stderr, "missing dependency") {
 		t.Errorf("search without a catalog = exit %d, stderr %q", r.code, r.stderr)
+	}
+}
+
+func TestSkillsSearchShowsOriginAndPossibleDuplicates(t *testing.T) {
+	f := newFixture(t)
+	f.installLock([]string{"alpha"}, map[string]map[string]string{
+		"alpha": {"SKILL.md": "---\nname: alpha\ndescription: a\n---\n"},
+	})
+	clone := f.home.Path(".claude/skills/beta")
+	f.home.WriteFile(".claude/skills/beta/SKILL.md", "---\nname: beta\ndescription: b\n---\n")
+	f.home.WriteFile(".claude/skills/beta/.git/HEAD", "ref: refs/heads/main\n")
+	f.git.AddClone(clone, ports.CloneStatus{
+		Remote: "https://github.com/other/repo.git", Branch: "main", Upstream: "origin/main", Head: "abc123", Clean: true,
+	})
+
+	catalog := fakes.NewCatalog()
+	catalog.Set("skills",
+		catalogSkill("other/skills", "alpha", 900),
+		catalogSkill("other/repo", "beta", 800),
+		catalogSkill("vercel-labs/agent-skills", "react-best", 700),
+	)
+
+	r := f.runCatalog(catalog, "skills", "search", "skills")
+	want := "" +
+		"NOMBRE      ORIGEN                    INSTALACIONES  ESTADO\n" +
+		"alpha       other/skills              900            posible duplicado (alpha, de acme/skills)\n" +
+		"beta        other/repo                800            instalada (other/repo)\n" +
+		"react-best  vercel-labs/agent-skills  700            \n" +
+		"\n" +
+		"Para instalar: skillhub skills install <origen>, con owner/repo@skill para GitHub o https://sitio@skill para un sitio web\n" +
+		"Por ejemplo: skillhub skills install other/skills@alpha\n"
+	if r.code != 0 || r.stdout != want || r.stderr != "" {
+		t.Errorf("search = exit %d\nstdout:\n%s\nwant:\n%s\nstderr: %q", r.code, r.stdout, want, r.stderr)
+	}
+
+	jr := f.runCatalog(catalog, "skills", "search", "skills", "--json")
+	if jr.code != 0 || jr.stderr != "" {
+		t.Fatalf("search --json = exit %d, stderr %q", jr.code, jr.stderr)
+	}
+	var got []map[string]any
+	if err := json.Unmarshal([]byte(jr.stdout), &got); err != nil {
+		t.Fatalf("stdout is not JSON: %v\n%s", err, jr.stdout)
+	}
+	if len(got) != 3 {
+		t.Fatalf("got %d entries, want 3", len(got))
+	}
+	if got[0]["installed"] != false || got[0]["possible_duplicate"] != true || got[0]["duplicate_of"] != "alpha" || got[0]["duplicate_source"] != "acme/skills" {
+		t.Errorf("entry[0] = %v, want possible_duplicate of alpha from acme/skills", got[0])
+	}
+	if got[1]["installed"] != true || got[1]["installed_source"] != "other/repo" {
+		t.Errorf("entry[1] = %v, want installed from other/repo", got[1])
+	}
+	if _, hasDup := got[2]["possible_duplicate"]; hasDup {
+		t.Errorf("entry[2] = %v, should omit possible_duplicate when false", got[2])
 	}
 }

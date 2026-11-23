@@ -2,29 +2,29 @@ skillhub   1 Skills (17)  2 Actualizar  3 Instalar  4 Salud (26)   h historial �
 12 skills de gentle-ai: las gestiona gentle-ai, skillhub no las toca.
 Buscar no cambia nada: solo se repara lo que elijas y confirmes.
 ╭──────────────────────────────────────╮╭──────────────────────────────────────────────────────────╮
-│ Hallazgos (36)                       ││ Enlaces rotos (19)
-│ Enlaces rotos (19)                   ││ 19 enlaces rotos: agentes que apuntan a una skill que ya
-│ · domain-driven-desi…                ││ no existe. Arreglo sugerido: borrar el enlace.
-│ · web-quality-audit                  ││
-│ · accessibility                      ││ domain-driven-design
-│ · domain-driven-desi…                ││ Dónde:
-│ · accessibility                      ││   ~/.config/devin/skills/domain-driven-design
-│ · domain-driven-desi…                ││ Hallazgo: broken_link:.config/devin/skills/domain-
-│ · git-guardrails-cla…                ││ driven-design
-│ · accessibility                      ││
-│ · domain-driven-desi…                ││ [enter] Ver cómo repararlo
-│ · git-guardrails-cla…                ││
-│ · web-quality-audit                  ││
-│ · accessibility                      ││
-│ · domain-driven-desi…                ││
-│ · git-guardrails-cla…                ││
-│ · web-quality-audit                  ││
-│ · accessibility                      ││
-│ · web-quality-audit                  ││
-│ · accessibility                      ││
-│ · web-quality-audit                  ││
-│ Apagadas pero visibl…                ││
-│ · lock:accessibility  Codex, OpenCo… ││
-│ · lock:domain-driven… Codex, OpenCo… ││
+│ 21 skills afectadas · 36 hallazgos   ││ accessibility
+│ ▾ accessibility          8 hallazgos ││
+│ · enlace roto                  Droid ││ 1 enlace roto: apunta a una skill que ya no existe.
+│ · enlace roto                  Junie ││ Arreglo sugerido: borrar el enlace.
+│ · enlace roto              Kilo Code ││ Agentes: Droid
+│ · enlace roto               Kiro CLI ││ Dónde:
+│ · enlace roto                     Pi ││   ~/.factory/skills/accessibility
+│ · enlace roto              Qwen Code ││ Hallazgo: broken_link:.factory/skills/accessibility
+│ · apagada pero visib… Codex, OpenCo… ││
+│ · nombre repetido                    ││ [enter] Ver cómo repararlo
+│ ▸ domain-driven-desi…    7 hallazgos ││
+│ ▸ git-guardrails-cla…    5 hallazgos ││
+│ ▸ web-quality-audit      7 hallazgos ││
+│ ▸ brainstorming           1 hallazgo ││
+│ ▸ humanizer               1 hallazgo ││
+│ ▸ requirements-elici…     1 hallazgo ││
+│ ▸ computer-use           2 hallazgos ││
+│ ▸ find-skills             1 hallazgo ││
+│ ▸ grill-with-docs         1 hallazgo ││
+│ ▸ orca-cli                1 hallazgo ││
+│ ▸ orchestration           1 hallazgo ││
+│ ▸ accessibility (~/.…     1 hallazgo ││
+│ ▸ domain-driven-desi…     1 hallazgo ││
+│ ▸ find-skills (~/.cl…     1 hallazgo ││
 ╰──────────────────────────────────────╯╰──────────────────────────────────────────────────────────╯
 enter ver cómo repararlo • r revisar ahora • ? ayuda • q salir

@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"skillhub/internal/app"
+	"skillhub/internal/entrypoints/text"
 	"skillhub/internal/shared/domain"
 )
 
@@ -66,7 +67,11 @@ func (r *runner) settingsCmd() *cobra.Command {
 func printSettings(cmd *cobra.Command, s domain.Settings) {
 	ignore := msgNone
 	if len(s.Ignore) > 0 {
-		ignore = strings.Join(s.Ignore, ", ")
+		items := make([]string, len(s.Ignore))
+		for i, item := range s.Ignore {
+			items[i] = text.SafeLine(item)
+		}
+		ignore = strings.Join(items, ", ")
 	}
 	fmt.Fprintf(cmd.OutOrStdout(), fmtSettings, formatDuration(s.CheckInterval), yesNo(s.Notifications), ignore)
 }

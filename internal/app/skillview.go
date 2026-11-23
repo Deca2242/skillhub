@@ -25,6 +25,14 @@ import (
 // (S13): which harnesses see each skill, and a readable name for each
 // harness. Neither writes anything.
 
+// Sighting kinds as exposed by Sighting.Kind, matching graph.Kind.
+const (
+	SightingDirect        = string(graph.Direct)
+	SightingViaLink       = string(graph.ViaLink)
+	SightingOwnCopy       = string(graph.OwnCopy)
+	SightingIndeterminate = string(graph.Indeterminate)
+)
+
 // Visibility returns, for each skill of the graph by its inventory ID, the
 // detected harnesses that see it, sorted and without repeats. A diagnostic
 // profile is not a harness and is left out. A skill parked by hand in the
@@ -34,6 +42,152 @@ import (
 // Without the version 2 ports it returns ErrMissingDependency, and the
 // caller keeps what the inventory's locations tell.
 func (a *App) Visibility(ctx context.Context) (map[string][]string, error) {
+	sightings, err := a.observeSightings(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string][]string, len(sightings))
+	for id, sgs := range sightings {
+		seen := make([]string, 0, len(sgs))
+		for _, sg := range sgs {
+			seen = append(seen, sg.Harness)
+		}
+		slices.Sort(seen)
+		out[id] = slices.Compact(seen)
+	}
+	return out, nil
+}
+
+// Sightings returns, for each skill of the graph by its inventory ID, how each
+// detected harness sees it and through which entry path. It applies the same
+// visibility rules as Visibility and only reads.
+func (a *App) Sightings(ctx context.Context) (map[string][]Sighting, error) {
+	return a.observeSightings(ctx)
+}
+
+// IndeterminateSkill is a skill whose visibility for one or both compared
+// agents is indeterminate, along with the agents and sightings explaining why.
+type IndeterminateSkill struct {
+	ID      string
+	Agents  []string
+	Reasons []Sighting
+}
+
+// AgentComparison is the pure comparison of what two agents see, computed from
+// already-loaded Sightings data without reading disk.
+type AgentComparison struct {
+	First         string
+	Second        string
+	Common        []string
+	OnlyFirst     []string
+	OnlySecond    []string
+	Indeterminate []IndeterminateSkill
+}
+
+// CompareAgents compares which skills first and second see based on sightings.
+// Skills whose visibility is indeterminate for either agent are placed apart in
+// Indeterminate with their sightings as reason.
+func CompareAgents(sightings map[string][]Sighting, first, second string) AgentComparison {
+	out := AgentComparison{
+		First:         first,
+		Second:        second,
+		Common:        []string{},
+		OnlyFirst:     []string{},
+		OnlySecond:    []string{},
+		Indeterminate: []IndeterminateSkill{},
+	}
+	if first == "" || second == "" || len(sightings) == 0 {
+		return out
+	}
+
+	for id, sgs := range sightings {
+		var hasFirst, hasSecond bool
+		var indetAgents []string
+		var indetReasons []Sighting
+		for _, sg := range sgs {
+			if sg.Harness != first && sg.Harness != second {
+				continue
+			}
+			if sg.Harness == first {
+				hasFirst = true
+			}
+			if sg.Harness == second {
+				hasSecond = true
+			}
+			if sg.Kind == SightingIndeterminate {
+				if !slices.Contains(indetAgents, sg.Harness) {
+					indetAgents = append(indetAgents, sg.Harness)
+				}
+				indetReasons = append(indetReasons, sg)
+			}
+		}
+
+		if len(indetReasons) > 0 {
+			slices.Sort(indetAgents)
+			slices.SortFunc(indetReasons, func(x, y Sighting) int {
+				if c := strings.Compare(x.Harness, y.Harness); c != 0 {
+					return c
+				}
+				return strings.Compare(x.Entry, y.Entry)
+			})
+			out.Indeterminate = append(out.Indeterminate, IndeterminateSkill{
+				ID:      id,
+				Agents:  indetAgents,
+				Reasons: indetReasons,
+			})
+			continue
+		}
+
+		switch {
+		case hasFirst && hasSecond:
+			out.Common = append(out.Common, id)
+		case hasFirst:
+			out.OnlyFirst = append(out.OnlyFirst, id)
+		case hasSecond:
+			out.OnlySecond = append(out.OnlySecond, id)
+		}
+	}
+
+	slices.Sort(out.Common)
+	slices.Sort(out.OnlyFirst)
+	slices.Sort(out.OnlySecond)
+	slices.SortFunc(out.Indeterminate, func(a, b IndeterminateSkill) int {
+		return strings.Compare(a.ID, b.ID)
+	})
+	return out
+}
+
+// AgentPresence summarizes which known harnesses are detected on the machine
+// and which are known in the agents table without being detected.
+type AgentPresence struct {
+	Detected   []string
+	Undetected []string
+}
+
+// DetectedAgents returns the detected harness IDs (from the graph, in table
+// order) and the known harness IDs from the agents table that were not
+// detected. It only reads.
+func (a *App) DetectedAgents(ctx context.Context) (AgentPresence, error) {
+	m, err := a.v2(ctx)
+	if err != nil {
+		return AgentPresence{}, err
+	}
+	g, err := m.observe()
+	if err != nil {
+		return AgentPresence{}, err
+	}
+	out := AgentPresence{
+		Detected: slices.Clone(g.Harnesses),
+	}
+	for _, h := range m.harnesses {
+		if !slices.Contains(g.Harnesses, h.ID) {
+			out.Undetected = append(out.Undetected, h.ID)
+		}
+	}
+	return out, nil
+}
+
+func (a *App) observeSightings(ctx context.Context) (map[string][]Sighting, error) {
 	m, err := a.v2(ctx)
 	if err != nil {
 		return nil, err
@@ -47,23 +201,35 @@ func (a *App) Visibility(ctx context.Context) (map[string][]string, error) {
 		entries[f.Path] = f.Entry
 	}
 	off := filepath.Join(g.Store, inventory.OffDirName)
-	out := make(map[string][]string, len(g.Skills))
+	out := make(map[string][]Sighting, len(g.Skills))
 	for _, s := range g.Skills {
 		inOff := s.Canonical != "" && strings.HasPrefix(entries[s.Canonical], off+string(filepath.Separator))
-		var seen []string
+		var sgs []Sighting
 		for _, v := range s.Visibility {
 			if inOff && v.Kind != graph.Direct && v.Kind != graph.ViaLink {
 				continue
 			}
 			if slices.Contains(g.Harnesses, v.Harness) {
-				seen = append(seen, v.Harness)
+				sgs = append(sgs, Sighting{
+					Harness: v.Harness,
+					Kind:    string(v.Kind),
+					Entry:   v.Entry,
+				})
 			}
 		}
-		if len(seen) == 0 {
+		if len(sgs) == 0 {
 			continue
 		}
-		slices.Sort(seen)
-		out[s.ID] = slices.Compact(seen)
+		slices.SortFunc(sgs, func(x, y Sighting) int {
+			if c := strings.Compare(x.Harness, y.Harness); c != 0 {
+				return c
+			}
+			if c := strings.Compare(x.Kind, y.Kind); c != 0 {
+				return c
+			}
+			return strings.Compare(x.Entry, y.Entry)
+		})
+		out[s.ID] = slices.Compact(sgs)
 	}
 	return out, nil
 }

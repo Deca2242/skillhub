@@ -1,25 +1,25 @@
 skillhub   1 Skills (17)  2 Actualizar  3 Instalar  4 Salud (26)   h historial • c ajustes
 17 skills · 13 activas · 4 desactivadas · 0 con actualización · 11 con problemas
+Visibles: 15 · sin agente: 2 (4 desactivadas visibles, 2 activas sin agente)
 ╭──────────────────────────────────────╮╭──────────────────────────────────────────────────────────╮
 │ Skills (17)                          ││ agent-browser
 │ ⚠ accessibility          enlace roto ││ agent-browser
 │ ● agent-browser          sin revisar ││
-│ ● archify                sin revisar ││ Disponible en: Claude Code, Codex, Cursor, Droid, Gemini
-│ ⚠ brainstorming        sin gestionar ││ CLI, GitHub Copilot, Kilo Code, OpenCode y Pi
-│ ⚠ computer-use            modificada ││ Origen: owner/agent-browser
-│ ⚠ domain-driven-design   enlace roto ││
-│ ● find-skills            sin revisar ││ [d] Desactivar   [e] Eliminar
-│ ⚠ git-guardrails-clau…   enlace roto ││ [l] Elegir agentes   [x] Ignorar
-│ ● grill-me               sin revisar ││ [enter] Ver todo
-│ ● grill-with-docs        sin revisar ││
-│ ⚠ humanizer            sin gestionar ││
-│ ⚠ i-have-adhd          sin gestionar ││
+│ ● archify                sin revisar ││ En skillhub: activa
+│ ⚠ brainstorming        sin gestionar ││ Disponible en: Claude Code, Codex, Cursor, Droid, Gemini
+│ ⚠ computer-use            modificada ││ CLI, GitHub Copilot, Kilo Code, OpenCode y Pi
+│ ⚠ domain-driven-design   enlace roto ││   Codex, Gemini CLI, OpenCode y Pi: directamente, sin
+│ ● find-skills            sin revisar ││ enlace
+│ ⚠ git-guardrails-clau…   enlace roto ││   Claude Code: por un enlace
+│ ● grill-me               sin revisar ││   Cursor, Droid, GitHub Copilot, Kilo Code y OpenCode:
+│ ● grill-with-docs        sin revisar ││ indeterminado (carpeta o enlaces sin verificar)
+│ ⚠ humanizer            sin gestionar ││ Origen: owner/agent-browser
+│ ⚠ i-have-adhd          sin gestionar ││ Actividad en skillhub: sin actividad registrada
 │ ● karpathy-guidelines    sin revisar ││
-│ ⚠ orca-cli                modificada ││
-│ ⚠ orchestration           modificada ││
-│ ⚠ requirements-elicit… sin gestionar ││
+│ ⚠ orca-cli                modificada ││ [d] Desactivar   [e] Eliminar
+│ ⚠ orchestration           modificada ││ [l] Elegir agentes   [x] Ignorar
+│ ⚠ requirements-elicit… sin gestionar ││ [enter] Ver todo
 │ ⚠ web-quality-audit      enlace roto ││
-│                                      ││
 │                                      ││
 │                                      ││
 │                                      ││

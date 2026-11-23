@@ -204,6 +204,105 @@ func TestEveryAppRefusalIsListed(t *testing.T) {
 	}
 }
 
+// The Salud list grouped by skill (INV10) is headed by the skills it
+// affects, then its findings; with no skill, by its findings alone.
+func TestTUIHealthTitleCountsSkillsThenFindings(t *testing.T) {
+	for _, tt := range []struct {
+		skills, findings int
+		want             string
+	}{
+		{21, 36, "21 skills afectadas · 36 hallazgos"},
+		{1, 1, "1 skill afectada · 1 hallazgo"},
+		{0, 3, text.TUIDoctorTitle(3)},
+	} {
+		if got := text.TUIHealthTitle(tt.skills, tt.findings); got != tt.want {
+			t.Errorf("TUIHealthTitle(%d, %d) = %q, want %q", tt.skills, tt.findings, got, tt.want)
+		}
+	}
+	if got := text.TUIHealthCount(1) + " | " + text.TUIHealthCount(8); got != "1 hallazgo | 8 hallazgos" {
+		t.Errorf("TUIHealthCount = %q", got)
+	}
+}
+
+// Under its skill, each kind of finding has short plain words of its own;
+// an unknown kind shows its code.
+func TestTUIHealthRowNamesEveryKind(t *testing.T) {
+	want := map[string]string{
+		"broken_link":               "enlace roto",
+		"link_cycle":                "enlace en ciclo",
+		"link_outside_roots":        "enlace a otra carpeta",
+		"identical_copies":          "copias idénticas",
+		"no_canonical":              "copias sin original",
+		"unmanaged_skill":           "sin gestionar",
+		"lock_entry_without_folder": "registro sin carpeta",
+		"lock_name_mismatch":        "nombre distinto",
+		"parked_but_visible":        "apagada pero visible",
+		"homonyms":                  "nombre repetido",
+	}
+	internal := regexp.MustCompile(`(?i)\b(lock|harness|destinos?|canónica|aparcada)\b`)
+	for _, kind := range text.TUIFindingOrder {
+		got := text.TUIHealthRow(kind)
+		if got != want[kind] || internal.MatchString(got) {
+			t.Errorf("TUIHealthRow(%q) = %q, want %q", kind, got, want[kind])
+		}
+	}
+	if got := text.TUIHealthRow("new_kind"); got != text.FindingKind("new_kind") {
+		t.Errorf("an unknown kind = %q, want its code", got)
+	}
+}
+
+// One finding is told in the singular, as its skill's panel and its repairs
+// show it, never "1 skill" and then "están" (A1 of INV10's verifier); more
+// than one keep the line of their group.
+func TestTUIHealthFindingsTellsOneInTheSingular(t *testing.T) {
+	want := map[string]string{
+		"broken_link":               "1 enlace roto: apunta a una skill que ya no existe. Arreglo sugerido: borrar el enlace.",
+		"link_cycle":                "1 enlace en ciclo: forma un ciclo y no lleva a ninguna skill. Arreglo sugerido: ninguno, skillhub solo lo informa.",
+		"link_outside_roots":        "1 enlace a otra carpeta: lleva fuera de las carpetas de skills conocidas. Arreglo sugerido: ninguno, skillhub no lo sigue.",
+		"identical_copies":          "1 skill copiada igual: la misma skill está en varios lugares, con el mismo contenido. Arreglo sugerido: dejar una sola copia y enlazar las demás.",
+		"no_canonical":              "1 skill sin original: está copiada en varios agentes, pero no en el almacén de skillhub. Arreglo sugerido: elegir la copia que se queda y enlazar las demás.",
+		"unmanaged_skill":           "1 skill sin gestionar: está copiada a mano, fuera del almacén de skillhub. Arreglo sugerido: pasarla a la gestión de skillhub.",
+		"lock_entry_without_folder": "1 registro sin carpeta: npx skills recuerda una skill cuya carpeta ya no está. Arreglo sugerido: reinstalarla o desactivar su registro.",
+		"lock_name_mismatch":        "1 nombre distinto: el nombre que guarda npx skills no coincide con el de la skill. Arreglo sugerido: ninguno, skillhub solo lo informa.",
+		"parked_but_visible":        "1 skill apagada pero visible: está en OFF/, pero algún agente todavía la ve. Arreglo sugerido: desactivarla con skillhub.",
+		"homonyms":                  "1 skill con nombre repetido: hay otra skill distinta que se llama igual. Arreglo sugerido: ninguno, skillhub nunca las une por su nombre.",
+	}
+	for _, kind := range text.TUIFindingOrder {
+		if got := text.TUIHealthFindings(kind, 1); got != want[kind] {
+			t.Errorf("TUIHealthFindings(%q, 1) = %q, want %q", kind, got, want[kind])
+		}
+		if got := text.TUIHealthFindings(kind, 3); got != text.TUIFindingGroup(kind, 3) {
+			t.Errorf("TUIHealthFindings(%q, 3) = %q, want the group's line %q", kind, got, text.TUIFindingGroup(kind, 3))
+		}
+	}
+	if got, want := text.TUIHealthFindings("new_kind", 1), "1 hallazgo de tipo «"+text.FindingKind("new_kind")+"»."; got != want {
+		t.Errorf("an unknown kind = %q, want %q", got, want)
+	}
+}
+
+// A group of findings that name no skill says so after its kind.
+func TestTUIHealthNoSkillNamesTheKind(t *testing.T) {
+	if got := text.TUIHealthNoSkill("broken_link"); got != "Enlaces rotos sin skill" {
+		t.Errorf("TUIHealthNoSkill = %q", got)
+	}
+}
+
+// A finding listed under several skills (A31) names the others, and says it
+// is one finding.
+func TestTUIHealthAlsoInSaysItIsOneFinding(t *testing.T) {
+	for names, want := range map[string]string{
+		"a":   "También aparece en a: es el mismo hallazgo, no uno por cada skill.",
+		"a,b": "También aparece en a y b: es el mismo hallazgo, no uno por cada skill.",
+	} {
+		if got := text.TUIHealthAlsoIn(strings.Split(names, ",")); got != want {
+			t.Errorf("TUIHealthAlsoIn(%s) = %q, want %q", names, got, want)
+		}
+	}
+	if got := text.TUIHealthAt("accessibility", "~/.claude-omni/skills/accessibility"); got != "accessibility (~/.claude-omni/skills/accessibility)" {
+		t.Errorf("TUIHealthAt = %q", got)
+	}
+}
+
 // The refusals of an install from a website are told without its
 // technical words.
 func TestTUIRefusalsOfAWebsiteArePlain(t *testing.T) {

@@ -210,7 +210,7 @@ func (m *Model) checkLines(c checks) string {
 		if c.labels != nil {
 			name = c.labels[a.Harness]
 		}
-		line := fmt.Sprintf("%s%s %s", cur, box, name)
+		line := fmt.Sprintf("%s%s %s", cur, box, text.SafeLine(name))
 		if !a.Changeable {
 			line += " " + text.TUIChecksFixed
 		}

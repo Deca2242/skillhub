@@ -40,9 +40,13 @@ func (r *runner) scanCmd() *cobra.Command {
 			tw := table(out)
 			fmt.Fprint(tw, hdrSkills)
 			for _, s := range skills {
-				name := s.Name
+				name := text.SafeLine(s.Name)
 				if len(s.Aliases) > 0 {
-					name = fmt.Sprintf(fmtSkillAlias, s.Name, strings.Join(s.Aliases, ", "))
+					aliases := make([]string, len(s.Aliases))
+					for i, a := range s.Aliases {
+						aliases[i] = text.SafeLine(a)
+					}
+					name = fmt.Sprintf(fmtSkillAlias, name, strings.Join(aliases, ", "))
 				}
 				fmt.Fprintf(tw, fmtSkillRow, name, text.OriginKind(s.Origin.Kind), harnesses(s.Locations),
 					text.State(s.State), issueNames(s.Issues))
@@ -160,7 +164,7 @@ func (r *runner) printCheck(cmd *cobra.Command, a *app.App, res app.CheckResult,
 	} else {
 		tw := table(out)
 		for _, t := range res.Report.Targets {
-			fmt.Fprintf(tw, fmtCheckTarget, t.Target, outcomeName(t))
+			fmt.Fprintf(tw, fmtCheckTarget, text.SafeLine(t.Target), outcomeName(t))
 		}
 		if err := tw.Flush(); err != nil {
 			return err
@@ -184,7 +188,7 @@ func outcomeName(t updates.TargetCheck) string {
 	case updates.CheckSkipped:
 		return msgOutcomeSk
 	case updates.CheckFailed:
-		return fmt.Sprintf(msgOutcomeFail, t.Err)
+		return fmt.Sprintf(msgOutcomeFail, text.SafeLine(fmt.Sprint(t.Err)))
 	case updates.CheckNotChecked:
 		if t.WebSource {
 			return text.WebUpdatesLater
@@ -203,7 +207,7 @@ func notification(d background.Decision) (string, string) {
 		case background.ReasonNewCandidates:
 			var names []string
 			for _, c := range d.NewCandidates {
-				name := strings.TrimPrefix(c.Target, domain.LockID(""))
+				name := text.SafeLine(strings.TrimPrefix(c.Target, domain.LockID("")))
 				if !slices.Contains(names, name) {
 					names = append(names, name)
 				}

@@ -12,6 +12,7 @@ import (
 	"unicode/utf8"
 
 	"skillhub/internal/manage/install"
+	"skillhub/internal/shared/domain"
 	"skillhub/internal/shared/ports"
 )
 
@@ -129,9 +130,22 @@ type CatalogEntry struct {
 	// InstallSource is what skills install takes: Source@SkillID for
 	// GitHub, https://Source@SkillID for a website.
 	InstallSource string `json:"install_source"`
-	// Installed is true when SkillID is already a skill of the inventory or
-	// an entry of the skills lock.
+	// Installed is true when SkillID matches an installed skill from the
+	// same origin (a lock entry with the same repository/site and skill, or
+	// a git clone whose remote points to the same repository).
 	Installed bool `json:"installed"`
+	// InstalledSource is the normalized origin of the installed match when
+	// Installed is true.
+	InstalledSource string `json:"installed_source,omitempty"`
+	// PossibleDuplicate is true when SkillID matches an installed skill (or
+	// one of its aliases) from another or unknown origin.
+	PossibleDuplicate bool `json:"possible_duplicate,omitempty"`
+	// DuplicateOf is the installed skill name that matched when
+	// PossibleDuplicate is true.
+	DuplicateOf string `json:"duplicate_of,omitempty"`
+	// DuplicateSource is the normalized origin of DuplicateOf, or empty
+	// when the installed skill has no recorded origin.
+	DuplicateSource string `json:"duplicate_source,omitempty"`
 }
 
 // CatalogOptions tune a catalog call.
@@ -256,7 +270,7 @@ func (a *App) catalogSearch(ctx context.Context, query string, limit int, opts C
 
 // catalogEntries adds what this machine knows to each skill.
 func (a *App) catalogEntries(ctx context.Context, skills []ports.CatalogSkill) ([]CatalogEntry, error) {
-	installed, err := a.installedKeys(ctx)
+	installed, err := a.installedCatalog(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -265,8 +279,8 @@ func (a *App) catalogEntries(ctx context.Context, skills []ports.CatalogSkill) (
 		e := CatalogEntry{
 			ID: s.ID, Source: s.Source, SkillID: s.SkillID, Name: s.Name, Installs: s.Installs,
 			InstallSource: s.Source + "@" + s.SkillID,
-			Installed:     installed[s.SkillID],
 		}
+		applyInstalledMatch(&e, installed)
 		site := ""
 		if isHost(s.Source) {
 			// A website: installed from its /.well-known/agent-skills/ (L84).
@@ -289,27 +303,173 @@ func isHost(source string) bool {
 	return !strings.Contains(source, "/") && strings.Contains(source, ".")
 }
 
-// installedKeys is every name of the inventory and every key of the lock.
-func (a *App) installedKeys(ctx context.Context) (map[string]bool, error) {
-	keys := map[string]bool{}
+type installedSkill struct {
+	displayName string
+	origin      string
+	names       []string
+}
+
+// installedCatalog collects every installed skill with its normalized origin
+// and matching names (name, aliases, and lock skillName).
+func (a *App) installedCatalog(ctx context.Context) ([]installedSkill, error) {
 	skills, err := a.scan(ctx)
 	if err != nil {
 		return nil, err
 	}
+	out := make([]installedSkill, 0, len(skills))
 	for _, s := range skills {
-		keys[s.Name] = true
-		for _, alias := range s.Aliases {
-			keys[alias] = true
+		origin := ""
+		switch s.Origin.Kind {
+		case domain.OriginLock:
+			if s.Origin.Lock != nil {
+				origin = normalizeCatalogOrigin(s.Origin.Lock.Source)
+			}
+		case domain.OriginGitClone:
+			if s.Origin.GitClone != nil {
+				origin = normalizeCatalogOrigin(s.Origin.GitClone.Remote)
+			}
 		}
+		names := appendUniqueLower(nil, s.Name)
+		for _, alias := range s.Aliases {
+			names = appendUniqueLower(names, alias)
+		}
+		out = append(out, installedSkill{
+			displayName: s.Name,
+			origin:      origin,
+			names:       names,
+		})
 	}
 	lock, err := a.d.Lock.Read()
 	if err != nil {
 		return nil, fmt.Errorf("read the skills lock: %w", err)
 	}
 	for _, e := range lock.Entries {
-		keys[e.Name] = true
+		origin := normalizeCatalogOrigin(e.Source)
+		if origin == "" {
+			origin = normalizeCatalogOrigin(e.SourceURL)
+		}
+		origName := lockEntrySkillName(e.Raw)
+		matched := false
+		for i := range out {
+			if out[i].origin == origin && strings.EqualFold(out[i].displayName, e.Name) {
+				out[i].names = appendUniqueLower(out[i].names, origName)
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			names := appendUniqueLower(nil, e.Name)
+			names = appendUniqueLower(names, origName)
+			out = append(out, installedSkill{
+				displayName: e.Name,
+				origin:      origin,
+				names:       names,
+			})
+		}
 	}
-	return keys, nil
+	return out, nil
+}
+
+func appendUniqueLower(dst []string, s string) []string {
+	v := strings.ToLower(strings.TrimSpace(s))
+	if v == "" || slices.Contains(dst, v) {
+		return dst
+	}
+	return append(dst, v)
+}
+
+func lockEntrySkillName(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var obj struct {
+		SkillName string `json:"skillName"`
+	}
+	if json.Unmarshal(raw, &obj) != nil {
+		return ""
+	}
+	return obj.SkillName
+}
+
+func applyInstalledMatch(e *CatalogEntry, installed []installedSkill) {
+	skillName := strings.ToLower(strings.TrimSpace(e.SkillID))
+	if skillName == "" {
+		skillName = strings.ToLower(strings.TrimSpace(e.Name))
+	}
+	if skillName == "" {
+		return
+	}
+	catalogOrigin := normalizeCatalogOrigin(e.Source)
+	if catalogOrigin != "" {
+		for _, inst := range installed {
+			if inst.origin == catalogOrigin && slices.Contains(inst.names, skillName) {
+				e.Installed = true
+				e.InstalledSource = inst.origin
+				return
+			}
+		}
+	}
+	for _, inst := range installed {
+		if slices.Contains(inst.names, skillName) {
+			e.PossibleDuplicate = true
+			e.DuplicateOf = inst.displayName
+			e.DuplicateSource = inst.origin
+			return
+		}
+	}
+}
+
+// normalizeCatalogOrigin normalizes a repository or remote URL (owner/repo,
+// https://github.com/owner/repo.git, git@github.com:owner/repo.git, etc.) to
+// a canonical lowercase identifier so equivalent origins compare equal.
+func normalizeCatalogOrigin(raw string) string {
+	s := strings.TrimSpace(raw)
+	if s == "" {
+		return ""
+	}
+	if !strings.Contains(s, "://") {
+		if before, after, ok := strings.Cut(s, ":"); ok && !strings.Contains(before, "/") {
+			host := before
+			if at := strings.LastIndex(host, "@"); at >= 0 {
+				host = host[at+1:]
+			}
+			return normalizeHostAndPath(host, after)
+		}
+	}
+	if _, rest, ok := strings.Cut(s, "://"); ok {
+		host, path, _ := strings.Cut(rest, "/")
+		if at := strings.LastIndex(host, "@"); at >= 0 {
+			host = host[at+1:]
+		}
+		host, _, _ = strings.Cut(host, ":")
+		return normalizeHostAndPath(host, path)
+	}
+	lower := strings.ToLower(s)
+	if strings.HasPrefix(lower, "github.com/") || strings.HasPrefix(lower, "www.github.com/") {
+		host, path, _ := strings.Cut(s, "/")
+		return normalizeHostAndPath(host, path)
+	}
+	s = strings.TrimSuffix(s, "/")
+	s = strings.TrimSuffix(s, ".git")
+	return strings.ToLower(s)
+}
+
+func normalizeHostAndPath(host, path string) string {
+	host = strings.ToLower(strings.TrimSpace(host))
+	host = strings.TrimPrefix(host, "www.")
+	path = strings.Trim(path, "/")
+	path = strings.TrimSuffix(path, ".git")
+	if host == "github.com" {
+		parts := strings.Split(path, "/")
+		if len(parts) >= 2 {
+			return strings.ToLower(parts[0] + "/" + parts[1])
+		}
+		return strings.ToLower(path)
+	}
+	if path == "" {
+		return host
+	}
+	return host + "/" + strings.ToLower(path)
 }
 
 // catalogCacheVersion is the format of catalog.json.

@@ -1,5 +1,6 @@
 skillhub   1 Skills (17)  2 Actualizar  3 Instalar  4 Salud (26)   h historial • c ajustes
 17 skills · 12 activas · 5 desactivadas · 0 con actualización · 11 con problemas
+Visibles: 14 · sin agente: 3 (4 desactivadas visibles, 2 activas sin agente)
 ╭──────────────────────────────────────╮╭──────────────────────────────────────────────────────────╮
 │ Skills · desactivadas (5)            ││ accessibility
 │ ⚠ accessibility          enlace roto ││ La desactivaste a mano moviéndola a OFF/, pero Codex,
@@ -9,7 +10,9 @@ skillhub   1 Skills (17)  2 Actualizar  3 Instalar  4 Salud (26)   h historial �
 │ ○ archify                desactivada ││
 │                                      ││ accessibility
 │                                      ││
+│                                      ││ En skillhub: desactivada (a mano en OFF/)
 │                                      ││ Disponible en: Codex, OpenCode y Pi
+│                                      ││   Codex, OpenCode y Pi: directamente, sin enlace
 │                                      ││ Origen: owner/accessibility
 │                                      ││ Tiene un enlace que no lleva a ninguna parte.
 │                                      ││ Desactivarla de verdad la guarda aparte, donde ningún
@@ -17,12 +20,9 @@ skillhub   1 Skills (17)  2 Actualizar  3 Instalar  4 Salud (26)   h historial �
 │                                      ││ (domain-driven-design, git-guardrails-claude-code y web-
 │                                      ││ quality-audit).
 │                                      ││ También borra sus 6 enlaces rotos.
+│                                      ││ Actividad en skillhub: sin actividad registrada
 │                                      ││
 │                                      ││ [x] Ignorar   [enter] Ver todo
-│                                      ││
-│                                      ││
-│                                      ││
-│                                      ││
 │                                      ││
 │                                      ││
 ╰──────────────────────────────────────╯╰──────────────────────────────────────────────────────────╯

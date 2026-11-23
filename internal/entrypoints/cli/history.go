@@ -38,8 +38,8 @@ func (r *runner) historyCmd() *cobra.Command {
 			tw := table(out)
 			fmt.Fprint(tw, hdrHistory)
 			for _, e := range entries {
-				fmt.Fprintf(tw, fmtHistory, formatTime(e.At), text.HistoryAction(e.Action), e.Target,
-					shortSHA(e.FromSHA), shortSHA(e.ToSHA), orNone(e.SnapshotID), orNone(e.Detail))
+				fmt.Fprintf(tw, fmtHistory, formatTime(e.At), text.HistoryAction(e.Action), text.SafeLine(e.Target),
+					shortSHA(e.FromSHA), shortSHA(e.ToSHA), orNone(text.SafeLine(e.SnapshotID)), orNone(text.SafeLine(e.Detail)))
 			}
 			return tw.Flush()
 		},
@@ -87,9 +87,9 @@ func (r *runner) undoCmd() *cobra.Command {
 				}
 				from := msgUndoLatest
 				if to != "" {
-					from = fmt.Sprintf(fmtUndoSnapshot, to)
+					from = fmt.Sprintf(fmtUndoSnapshot, text.SafeLine(to))
 				}
-				fmt.Fprintf(out, fmtUndoPlan, target, from)
+				fmt.Fprintf(out, fmtUndoPlan, text.SafeLine(target), from)
 				fmt.Fprint(out, msgDryRun)
 				return nil
 			}
@@ -97,7 +97,7 @@ func (r *runner) undoCmd() *cobra.Command {
 			res, err := a.Undo(r.ctx, req)
 			if errors.Is(err, updates.ErrUndoNeedsConfirmation) {
 				// The current folder is already saved, with keep set.
-				fmt.Fprintf(out, fmtUndoChanged, target, res.SavedSnapshotID)
+				fmt.Fprintf(out, fmtUndoChanged, text.SafeLine(target), text.SafeLine(res.SavedSnapshotID))
 				if !r.env.Interactive {
 					return fail(msgUndoNeedsTerminal)
 				}
@@ -109,15 +109,15 @@ func (r *runner) undoCmd() *cobra.Command {
 			}
 			switch {
 			case errors.Is(err, updates.ErrNothingToUndo):
-				return fail(msgNothingToUndo, target)
+				return fail(msgNothingToUndo, text.SafeLine(target))
 			case errors.Is(err, updates.ErrSnapshotNotFound):
-				return fail(msgSnapshotNotFound, target)
+				return fail(msgSnapshotNotFound, text.SafeLine(target))
 			case err != nil:
 				return err
 			}
-			fmt.Fprintf(out, fmtUndone, target, res.SnapshotID)
+			fmt.Fprintf(out, fmtUndone, text.SafeLine(target), text.SafeLine(res.SnapshotID))
 			if res.Detail != "" {
-				fmt.Fprintf(out, fmtDetail, res.Detail)
+				fmt.Fprintf(out, fmtDetail, text.SafeLine(res.Detail))
 			}
 			return nil
 		},
@@ -161,7 +161,7 @@ func (r *runner) recoverCmd() *cobra.Command {
 				if !ok {
 					fmt.Fprint(out, text.RecoverNoOp)
 				} else {
-					fmt.Fprintf(out, fmtRecoverPlan, op.Target, op.RestoreSnapshotID, opKind(op.Kind), formatTime(op.StartedAt))
+					fmt.Fprintf(out, fmtRecoverPlan, text.SafeLine(op.Target), text.SafeLine(op.RestoreSnapshotID), opKind(op.Kind), formatTime(op.StartedAt))
 				}
 				if orphan, err := a.OrphanStaging(); err != nil {
 					return err

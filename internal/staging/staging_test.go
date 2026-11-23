@@ -40,9 +40,15 @@ var upstream = map[string]string{
 
 func newFixture(t *testing.T) *fixture {
 	t.Helper()
+	return newFixtureWith(t, upstream)
+}
+
+// newFixtureWith is newFixture with upstream holding files.
+func newFixtureWith(t *testing.T, files map[string]string) *fixture {
+	t.Helper()
 	home := testsupport.NewHome(t)
 	src := home.Mkdir("src/alpha")
-	for rel, content := range upstream {
+	for rel, content := range files {
 		mode := os.FileMode(0o644)
 		if strings.HasSuffix(rel, ".sh") {
 			mode = 0o755
@@ -63,7 +69,7 @@ func newFixture(t *testing.T) *fixture {
 		tree:  tree,
 		st:    staging.Stager{Files: fsadapter.NewFileOps(home.Paths().Guard()), Blobs: gh},
 		dir:   home.Path(".agents/.skillhub/staging/abc"),
-		files: upstream,
+		files: files,
 	}
 }
 
@@ -152,6 +158,15 @@ func TestStageRefusesTreesItMustNotWrite(t *testing.T) {
 		{".GIT", []treehash.Node{file(".GIT/hooks/post-merge", 1)}, staging.ErrUnsupportedEntry},
 		{"backslash", []treehash.Node{file(`a\b.md`, 1)}, staging.ErrUnsupportedEntry},
 		{"NUL", []treehash.Node{file("a\x00b.md", 1)}, staging.ErrUnsupportedEntry},
+		{"carriage return", []treehash.Node{file("a\rb.md", 1)}, staging.ErrUnsupportedEntry},
+		{"escape sequence", []treehash.Node{file("a\x1b[2Kb.md", 1)}, staging.ErrUnsupportedEntry},
+		{"newline", []treehash.Node{file("a\nb.md", 1)}, staging.ErrUnsupportedEntry},
+		{"tab", []treehash.Node{file("a\tb.md", 1)}, staging.ErrUnsupportedEntry},
+		{"DEL", []treehash.Node{file("a\x7fb.md", 1)}, staging.ErrUnsupportedEntry},
+		{"C1 control", []treehash.Node{file("a"+string(rune(0x9b))+"2Kb.md", 1)}, staging.ErrUnsupportedEntry},
+		{"not UTF-8", []treehash.Node{file("a\xffb.md", 1)}, staging.ErrUnsupportedEntry},
+		{"bidi mark", []treehash.Node{file("factura"+string(rune(0x202e))+"dm.exe", 1)}, staging.ErrUnsupportedEntry},
+		{"bidi mark in a directory", []treehash.Node{file("ref"+string(rune(0x2066))+"/a.md", 1)}, staging.ErrUnsupportedEntry},
 		{"symlink", []treehash.Node{{Path: "link", Mode: treehash.ModeSymlink, SHA: strings.Repeat("b", 40), Size: 4}}, staging.ErrUnsupportedEntry},
 		{"submodule", []treehash.Node{{Path: "sub", Mode: treehash.ModeSubmodule, SHA: strings.Repeat("c", 40)}}, staging.ErrUnsupportedEntry},
 		{"too many files", many, staging.ErrLimitsExceeded},
@@ -174,6 +189,58 @@ func TestStageRefusesTreesItMustNotWrite(t *testing.T) {
 			}
 			f.assertNoDir()
 		})
+	}
+}
+
+// A file name with a bidi control would print reordered: each of the
+// Unicode bidi controls is refused (A28), in a file or a directory name.
+func TestCheckNodesRefusesEveryBidiControl(t *testing.T) {
+	bidi := []rune{0x061c, 0x200e, 0x200f, 0x202a, 0x202b, 0x202c, 0x202d, 0x202e, 0x2066, 0x2067, 0x2068, 0x2069}
+	for _, r := range bidi {
+		for _, p := range []string{"dir/a" + string(r) + "b.md", "d" + string(r) + "/a.md"} {
+			err := staging.CheckNodes([]treehash.Node{file(p, 1)})
+			if !errors.Is(err, staging.ErrUnsupportedEntry) {
+				t.Errorf("U+%04X in %q: err = %v, want %v", r, p, err, staging.ErrUnsupportedEntry)
+			}
+			if err != nil && strings.ContainsRune(err.Error(), r) {
+				t.Errorf("U+%04X: the error prints the name as it is: %q", r, err.Error())
+			}
+		}
+	}
+	// A symlink is refused for its mode too, but its name is checked first:
+	// the error quotes it instead of printing it as it is.
+	link := treehash.Node{Path: "enlace\x1b[2K" + string(rune(0x202e)), Mode: treehash.ModeSymlink, SHA: strings.Repeat("b", 40)}
+	err := staging.CheckNodes([]treehash.Node{link})
+	if !errors.Is(err, staging.ErrUnsupportedEntry) || strings.ContainsAny(err.Error(), "\x1b"+string(rune(0x202e))) {
+		t.Errorf("a symlink with a hostile name: err = %q, want %v with the name quoted", err, staging.ErrUnsupportedEntry)
+	}
+}
+
+// Names in any script stage as they are: accents, eñes, emoji, other
+// alphabets and spaces are not control characters.
+func TestStageWritesFileNamesWithAccents(t *testing.T) {
+	files := map[string]string{
+		"SKILL.md":                  "---\nname: alpha\ndescription: Alpha.\n---\nBody\n",
+		"referencias/canción.md":    "Canción\n",
+		"guía del ñandú 🎉.md":       "Ñandú\n",
+		"עברית/árabe-مرحبا.txt":     "Hola\n",
+		"Ångström/pingüino café.md": "Café\n",
+	}
+	f := newFixtureWith(t, files)
+
+	got, err := f.st.Stage(context.Background(), f.request())
+	if err != nil {
+		t.Fatalf("Stage: %v", err)
+	}
+
+	if got.SHA != f.tree.SHA {
+		t.Errorf("staged SHA = %s, want %s", got.SHA, f.tree.SHA)
+	}
+	for rel, want := range files {
+		data, err := os.ReadFile(filepath.Join(f.dir, filepath.FromSlash(rel)))
+		if err != nil || string(data) != want {
+			t.Errorf("%s = %q, %v; want %q", rel, data, err, want)
+		}
 	}
 }
 

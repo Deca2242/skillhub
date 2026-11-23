@@ -1,0 +1,35 @@
+skillhub   1 Skills (5)  2 Actualizar (1)  3 Instalar  4 Salud 
+╭──────────────────────────────────────────────────────────────────────────────╮
+│ Actualizaciones (1)                                                          │
+│ ● gamma                                                                 bajo │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭──────────────────────────────────────────────────────────────────────────────╮
+│ gamma                                                                        │
+│ De la versión 970c0e7511 a la 9525f95510.                                    │
+│ Riesgo: ● bajo. Cambia las instrucciones que lee el agente.                  │
+│ Qué cambia: cambia solo texto.                                               │
+│                                                                              │
+│ Archivos que cambian (1):                                                    │
+│   modificado  SKILL.md                                                       │
+│                                                                              │
+│ [enter] Ver cambios   [a] Aplicar esta                                       │
+│ [o] Omitir esta versión   [t] Aplicar todas                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+No se pudieron revisar:
+• alpha — falló la revisión (hace 3 horas)
+• gitlab-skill — no revisable (sin origen registrado)
+• manual-one — no revisable (sin origen registrado)
+• ui-taste — sin seguimiento (instalada desde un sitio web)
+enter ver cambios • a aplicar esta • o omitir esta versión • t aplicar todas • r
+revisar ahora • ? ayuda • q salir                                               

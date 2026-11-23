@@ -27,7 +27,6 @@ const (
 	msgYes              = "sí"
 	msgNo               = "no"
 	msgNoSkills         = "No se encontraron skills instaladas."
-	msgNoUpdates        = "No hay actualizaciones pendientes."
 	msgNoHistory        = "No hay entradas en el historial."
 	msgFilterPrompt     = "Filtro: "
 	msgChecking         = "Revisando actualizaciones..."

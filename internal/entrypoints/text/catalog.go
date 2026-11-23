@@ -51,13 +51,16 @@ const (
 	// CatalogCacheNotSaved warns that the cache could not be written.
 	CatalogCacheNotSaved = "Aviso: no se pudo guardar la caché del catálogo: %v\n"
 
-	catalogHeader      = "NOMBRE\tORIGEN\tINSTALACIONES\tESTADO\n"
-	catalogInstalled   = "instalada"
-	catalogWebsite     = "sitio web (no es GitHub)"
-	catalogNotSupport  = "no instalable"
-	catalogInstallHelp = "Para instalar: skillhub skills install <origen>, con owner/repo@skill para GitHub o https://sitio@skill para un sitio web\n"
-	catalogInstallEg   = "Por ejemplo: skillhub skills install %s\n"
-	catalogStale       = "Aviso: %s. Se muestran resultados guardados del %s.\n"
+	catalogHeader            = "NOMBRE\tORIGEN\tINSTALACIONES\tESTADO\n"
+	catalogInstalled         = "instalada"
+	catalogInstalledOrigin   = "instalada (%s)"
+	catalogDuplicateOrigin   = "posible duplicado (%s, de %s)"
+	catalogDuplicateNoOrigin = "posible duplicado (%s, sin origen)"
+	catalogWebsite           = "sitio web (no es GitHub)"
+	catalogNotSupport        = "no instalable"
+	catalogInstallHelp       = "Para instalar: skillhub skills install <origen>, con owner/repo@skill para GitHub o https://sitio@skill para un sitio web\n"
+	catalogInstallEg         = "Por ejemplo: skillhub skills install %s\n"
+	catalogStale             = "Aviso: %s. Se muestran resultados guardados del %s.\n"
 )
 
 // Installs shows a count with its thousands apart, as the RAE recommends
@@ -77,13 +80,22 @@ func Installs(n int) string {
 	return b.String()
 }
 
-// CatalogMark is the state column of a catalog entry: installed, a website
-// that installs from its /.well-known/agent-skills/ (L84), not installable,
-// or empty when it installs from GitHub.
+// CatalogMark is the state column of a catalog entry: installed (with its
+// origin), possible duplicate (with matching skill and origin), a website that
+// installs from its /.well-known/agent-skills/ (L84), not installable, or
+// empty when it installs from GitHub.
 func CatalogMark(e app.CatalogEntry) string {
 	switch {
 	case e.Installed:
+		if e.InstalledSource != "" {
+			return fmt.Sprintf(catalogInstalledOrigin, SafeLine(e.InstalledSource))
+		}
 		return catalogInstalled
+	case e.PossibleDuplicate:
+		if e.DuplicateSource != "" {
+			return fmt.Sprintf(catalogDuplicateOrigin, SafeLine(e.DuplicateOf), SafeLine(e.DuplicateSource))
+		}
+		return fmt.Sprintf(catalogDuplicateNoOrigin, SafeLine(e.DuplicateOf))
 	case e.Installable && strings.HasPrefix(e.InstallSource, "https://"):
 		return catalogWebsite
 	case e.Installable:
@@ -99,7 +111,7 @@ func CatalogTable(entries []app.CatalogEntry) string {
 	tw := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
 	fmt.Fprint(tw, catalogHeader)
 	for _, e := range entries {
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", e.Name, e.Source, Installs(e.Installs), CatalogMark(e))
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", SafeLine(e.Name), SafeLine(e.Source), Installs(e.Installs), CatalogMark(e))
 	}
 	_ = tw.Flush() //nolint:errcheck // a strings.Builder never fails.
 	return b.String()
@@ -111,7 +123,7 @@ func CatalogInstallHint(entries []app.CatalogEntry) string {
 	out := catalogInstallHelp
 	for _, e := range entries {
 		if e.Installable && !e.Installed {
-			return out + fmt.Sprintf(catalogInstallEg, e.InstallSource)
+			return out + fmt.Sprintf(catalogInstallEg, SafeLine(e.InstallSource))
 		}
 	}
 	return out
@@ -141,7 +153,7 @@ func CatalogError(err error) (msg string, ok bool) {
 	case app.ErrCatalogBadResponse:
 		return "skills.sh envió una respuesta inesperada; vuelve a intentarlo más tarde", true
 	default:
-		return fmt.Sprintf("falló la consulta a skills.sh: %v", ce.Err), true
+		return fmt.Sprintf("falló la consulta a skills.sh: %s", SafeLine(fmt.Sprint(ce.Err))), true
 	}
 }
 
@@ -150,7 +162,7 @@ func CatalogError(err error) (msg string, ok bool) {
 func CatalogStale(err error, at time.Time) string {
 	reason, ok := CatalogError(err)
 	if !ok {
-		reason = err.Error()
+		reason = SafeLine(err.Error())
 	}
 	return fmt.Sprintf(catalogStale, reason, at.Local().Format("2006-01-02 15:04"))
 }

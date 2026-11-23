@@ -164,6 +164,7 @@ func (r *runner) planned(cmd *cobra.Command, ap approval, req app.Request) error
 
 func (r *runner) skillsCmd() *cobra.Command {
 	return group("skills", text.SkillsShort,
+		r.skillsShowCmd(),
 		r.installCmd(),
 		r.keyCmd(text.RemoveUse, text.RemoveShort, text.RemoveLong, app.ActionRemove),
 		r.keyCmd(text.DisableUse, text.DisableShort, text.DisableLong, app.ActionDisable),

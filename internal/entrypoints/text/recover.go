@@ -37,12 +37,12 @@ var recoverNotes = map[string]string{
 }
 
 // RecoverNote is the Spanish sentence of a note a version 1 restore left
-// about the lock; a note it does not know is shown as it came.
+// about the lock; a note it does not know is shown escaped with SafeLine.
 func RecoverNote(detail string) string {
 	if s, ok := recoverNotes[detail]; ok {
 		return s
 	}
-	return detail
+	return SafeLine(detail)
 }
 
 // RecoverLeftovers names, in a sentence, what a recover with no operation
@@ -72,9 +72,9 @@ func RecoveryV1(res updates.RecoverResult, leftovers bool) string {
 	}
 	var b strings.Builder
 	if res.Restored {
-		fmt.Fprintf(&b, fmtRecovered, op.Target, op.RestoreSnapshotID)
+		fmt.Fprintf(&b, fmtRecovered, SafeLine(op.Target), SafeLine(op.RestoreSnapshotID))
 	} else {
-		fmt.Fprintf(&b, fmtRecoveredEmpty, op.Target)
+		fmt.Fprintf(&b, fmtRecoveredEmpty, SafeLine(op.Target))
 	}
 	if res.Detail != "" {
 		fmt.Fprintf(&b, fmtRecoverNote, RecoverNote(res.Detail))

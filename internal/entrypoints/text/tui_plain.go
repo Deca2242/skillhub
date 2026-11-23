@@ -64,7 +64,7 @@ const (
 	TUIPanelNoOrigin      = "copiada a mano, sin origen registrado"
 	TUIPanelDisabledBy    = "desactivada con skillhub"
 	TUIPanelUnmanaged     = "skillhub no la gestiona: revísala en Salud (4)."
-	TUIPanelIgnored       = "Ignorada: skillhub no la muestra ni la revisa. Tus agentes la siguen usando."
+	TUIPanelIgnored       = "Ignorada: skillhub no la muestra ni la revisa."
 
 	TUIActionDisable  = "[d] Desactivar"
 	TUIActionRemove   = "[e] Eliminar"
@@ -90,18 +90,20 @@ const (
 )
 
 // TUIPanelAvailable names the agents that see the skill.
-func TUIPanelAvailable(agents string) string { return "Disponible en: " + agents }
+func TUIPanelAvailable(agents string) string { return "Disponible en: " + SafeLine(agents) }
 
 // TUIPanelOrigin tells where the skill comes from.
-func TUIPanelOrigin(origin string) string { return "Origen: " + origin }
+func TUIPanelOrigin(origin string) string { return "Origen: " + SafeLine(origin) }
 
 // TUIPanelReturnsTo names the agents a disabled skill returns to when it
 // is enabled.
-func TUIPanelReturnsTo(agents string) string { return "Al activarla vuelve a estar en " + agents + "." }
+func TUIPanelReturnsTo(agents string) string {
+	return "Al activarla vuelve a estar en " + SafeLine(agents) + "."
+}
 
 // TUIPanelDisabledSince tells since when a disabled skill is off.
 func TUIPanelDisabledSince(when string) string {
-	return fmt.Sprintf("Desactivada desde %s. Ningún agente la ve.", when)
+	return fmt.Sprintf("Desactivada desde %s. Ningún agente la ve.", SafeLine(when))
 }
 
 // TUIPanelOffHand explains a skill moved to the store's OFF/ by hand, naming
@@ -111,7 +113,7 @@ func TUIPanelOffHand(agents []string) string {
 	case 0:
 		return "La desactivaste a mano moviéndola a OFF/, y ningún agente la ve."
 	case 1:
-		return fmt.Sprintf("La desactivaste a mano moviéndola a OFF/, pero %s la sigue viendo porque busca en subcarpetas.", agents[0])
+		return fmt.Sprintf("La desactivaste a mano moviéndola a OFF/, pero %s la sigue viendo porque busca en subcarpetas.", SafeLine(agents[0]))
 	}
 	return fmt.Sprintf("La desactivaste a mano moviéndola a OFF/, pero %s la siguen viendo porque buscan en subcarpetas.", JoinNames(agents))
 }
@@ -129,7 +131,7 @@ func TUIPanelAdoptOff(keys []string, self string) string {
 	case 0:
 		return "Desactivarla de verdad la guarda aparte, donde ningún agente la ve."
 	case 1:
-		return fmt.Sprintf("Desactivarla de verdad la guarda aparte, donde ningún agente la ve, junto con la otra skill de OFF/ (%s).", others[0])
+		return fmt.Sprintf("Desactivarla de verdad la guarda aparte, donde ningún agente la ve, junto con la otra skill de OFF/ (%s).", SafeLine(others[0]))
 	}
 	return fmt.Sprintf("Desactivarla de verdad la guarda aparte, donde ningún agente la ve, junto con las otras %d skills de OFF/ (%s).", len(others), JoinNames(others))
 }
@@ -212,14 +214,19 @@ func TUIPlainProblems(state domain.State, issues []domain.Issue) []string {
 }
 
 // JoinNames joins names as a person reads them: "A", "A y B", "A, B y C".
+// Every item passes through SafeLine so third-party names cannot act on the terminal.
 func JoinNames(names []string) string {
 	switch len(names) {
 	case 0:
 		return ""
 	case 1:
-		return names[0]
+		return SafeLine(names[0])
 	}
-	return strings.Join(names[:len(names)-1], ", ") + " y " + names[len(names)-1]
+	safe := make([]string, len(names))
+	for i, n := range names {
+		safe[i] = SafeLine(n)
+	}
+	return strings.Join(safe[:len(safe)-1], ", ") + " y " + safe[len(safe)-1]
 }
 
 func agents(ids []string, name AgentNamer) string {
@@ -280,11 +287,11 @@ func TUIPlanSummary(p app.Proposal, name AgentNamer) Summary {
 	}
 	switch r.Action {
 	case app.ActionDisable:
-		s.Question = fmt.Sprintf("¿Desactivar %s?", r.Key)
+		s.Question = fmt.Sprintf("¿Desactivar %s?", SafeLine(r.Key))
 		s.Lines = []string{gone(), "No se borra nada: la puedes volver a activar con [a]."}
 		reload()
 	case app.ActionEnable:
-		s.Question = fmt.Sprintf("¿Activar %s?", r.Key)
+		s.Question = fmt.Sprintf("¿Activar %s?", SafeLine(r.Key))
 		s.Lines = []string{"Vuelve a quedar como estaba antes de desactivarla."}
 		if who != "" {
 			s.Lines = []string{fmt.Sprintf("Volverá a estar disponible en %s.", who)}
@@ -292,8 +299,8 @@ func TUIPlanSummary(p app.Proposal, name AgentNamer) Summary {
 		s.Lines = append(s.Lines, "Se deshace con z enseguida, o desactivándola con [d].")
 		reload()
 	case app.ActionUnlink:
-		h := name(r.Harness)
-		s.Question = fmt.Sprintf("¿Quitar %s de %s?", r.Key, h)
+		h := SafeLine(name(r.Harness))
+		s.Question = fmt.Sprintf("¿Quitar %s de %s?", SafeLine(r.Key), h)
 		first := fmt.Sprintf("Dejará de estar disponible en %s.", h)
 		if p.Toggle != nil && sees(p.Toggle.StillVisible, r.Harness) {
 			first = fmt.Sprintf("%s la seguirá viendo por otra vía: esto solo quita una de ellas.", h)
@@ -303,8 +310,8 @@ func TUIPlanSummary(p app.Proposal, name AgentNamer) Summary {
 			s.Lines = append(s.Lines, reloadIn(p.Reload, name))
 		}
 	case app.ActionLink:
-		h := name(r.Harness)
-		s.Question = fmt.Sprintf("¿Añadir %s a %s?", r.Key, h)
+		h := SafeLine(name(r.Harness))
+		s.Question = fmt.Sprintf("¿Añadir %s a %s?", SafeLine(r.Key), h)
 		s.Lines = []string{
 			fmt.Sprintf("Quedará disponible en %s, sin copiarla: es la misma skill.", h),
 			"Se deshace con z enseguida, o quitándola con [l].",
@@ -313,7 +320,7 @@ func TUIPlanSummary(p app.Proposal, name AgentNamer) Summary {
 			s.Lines = append(s.Lines, reloadIn(p.Reload, name))
 		}
 	case app.ActionRemove:
-		s.Question = fmt.Sprintf("¿Eliminar %s?", r.Key)
+		s.Question = fmt.Sprintf("¿Eliminar %s?", SafeLine(r.Key))
 		first := gone()
 		if p.Remove != nil && p.Remove.Parked {
 			first = "Está desactivada: ningún agente la ve ahora."
@@ -328,6 +335,7 @@ func TUIPlanSummary(p app.Proposal, name AgentNamer) Summary {
 		if p.Install != nil {
 			key, from = p.Install.Key, tuiOrigin(p.Install.Source, p.Install.Site)
 		}
+		key = SafeLine(key)
 		if r.Action == app.ActionInstall {
 			s.Question = fmt.Sprintf("¿Instalar %s?", key)
 			s.Lines = []string{fmt.Sprintf("Se instala desde %s.", from)}
@@ -344,7 +352,7 @@ func TUIPlanSummary(p app.Proposal, name AgentNamer) Summary {
 		s.Question = fmt.Sprintf("¿%s?", lookup(plainRepairs, r.Repair))
 		first := "Corrige el problema que encontró Salud."
 		if p.Repair != nil && p.Repair.Key != "" {
-			first = fmt.Sprintf("Corrige el problema que encontró Salud en la skill %s.", p.Repair.Key)
+			first = fmt.Sprintf("Corrige el problema que encontró Salud en la skill %s.", SafeLine(p.Repair.Key))
 		}
 		s.Lines = append(s.Lines, first)
 		s.Lines = append(s.Lines, "Lo que se quita queda guardado: se deshace con z enseguida, o desde el Historial (h).")
@@ -357,7 +365,7 @@ func TUIPlanSummary(p app.Proposal, name AgentNamer) Summary {
 			}
 		}
 		if len(keys) == 1 {
-			s.Question = fmt.Sprintf("¿Desactivar de verdad %s, la skill de OFF/?", keys[0])
+			s.Question = fmt.Sprintf("¿Desactivar de verdad %s, la skill de OFF/?", SafeLine(keys[0]))
 			s.Lines = []string{
 				"skillhub la guarda aparte, donde ningún agente la ve. OFF/README.md no se toca.",
 				"No se borra nada: la puedes volver a activar con [a].",
@@ -390,7 +398,7 @@ func TUIPlanSummary(p app.Proposal, name AgentNamer) Summary {
 			s.Lines = append(s.Lines, reloadIn(p.Reload, name))
 		}
 	default:
-		s.Question = fmt.Sprintf("¿%s?", string(r.Action))
+		s.Question = fmt.Sprintf("¿%s?", SafeLine(string(r.Action)))
 	}
 	return s
 }
@@ -412,21 +420,21 @@ func TUIDone(res app.Result, name AgentNamer) string {
 	var first string
 	switch r.Action {
 	case app.ActionDisable:
-		first = fmt.Sprintf("Listo: %s está desactivada.", r.Key)
+		first = fmt.Sprintf("Listo: %s está desactivada.", SafeLine(r.Key))
 	case app.ActionEnable:
-		first = fmt.Sprintf("Listo: %s está activada.", r.Key)
+		first = fmt.Sprintf("Listo: %s está activada.", SafeLine(r.Key))
 	case app.ActionUnlink:
-		first = fmt.Sprintf("Listo: %s ya no está en %s.", r.Key, name(r.Harness))
+		first = fmt.Sprintf("Listo: %s ya no está en %s.", SafeLine(r.Key), SafeLine(name(r.Harness)))
 	case app.ActionLink:
-		first = fmt.Sprintf("Listo: %s está disponible en %s.", r.Key, name(r.Harness))
+		first = fmt.Sprintf("Listo: %s está disponible en %s.", SafeLine(r.Key), SafeLine(name(r.Harness)))
 	case app.ActionRemove:
-		first = fmt.Sprintf("Listo: %s se movió a la papelera de skillhub.", r.Key)
+		first = fmt.Sprintf("Listo: %s se movió a la papelera de skillhub.", SafeLine(r.Key))
 	case app.ActionInstall, app.ActionReinstall:
 		key := r.Key
 		if p.Install != nil {
 			key = p.Install.Key
 		}
-		first = fmt.Sprintf("Listo: %s está instalada.", key)
+		first = fmt.Sprintf("Listo: %s está instalada.", SafeLine(key))
 	case app.ActionAdoptOff:
 		first = "Listo: las skills de OFF/ están desactivadas con skillhub."
 	case app.ActionUndo:
@@ -449,7 +457,7 @@ func TUIDone(res app.Result, name AgentNamer) string {
 // the website of a well-known source, from its address.
 func tuiOrigin(source, site string) string {
 	if site == "" {
-		return source
+		return SafeLine(source)
 	}
 	host := strings.TrimPrefix(strings.TrimPrefix(site, "https://"), "http://")
 	if i := strings.IndexAny(host, "/@"); i >= 0 {
@@ -458,14 +466,14 @@ func tuiOrigin(source, site string) string {
 	if host == "" {
 		host = source
 	}
-	return fmt.Sprintf("el sitio web %s (no es GitHub)", host)
+	return fmt.Sprintf("el sitio web %s (no es GitHub)", SafeLine(host))
 }
 
 // TUIInstallSummary heads the review of an install, before its files: repo
 // is its GitHub repository, or site its website.
 func TUIInstallSummary(key, repo, site string) Summary {
 	return Summary{
-		Question: fmt.Sprintf("¿Instalar %s?", key),
+		Question: fmt.Sprintf("¿Instalar %s?", SafeLine(key)),
 		Lines: []string{
 			fmt.Sprintf("Viene de %s. Revisa abajo sus archivos; después eliges en qué agentes queda disponible.", tuiOrigin(repo, site)),
 			"Nada se instala hasta que confirmes el plan.",
@@ -476,7 +484,7 @@ func TUIInstallSummary(key, repo, site string) Summary {
 // TUIUpdateSummary starts the confirmation of a version 1 update.
 func TUIUpdateSummary(name string, files int, locallyModified bool) Summary {
 	s := Summary{
-		Question: fmt.Sprintf("¿Actualizar %s?", name),
+		Question: fmt.Sprintf("¿Actualizar %s?", SafeLine(name)),
 		Lines:    []string{fmt.Sprintf("Se instala la versión nueva del autor (%d archivo(s) cambian).", files)},
 	}
 	if locallyModified {
@@ -490,22 +498,22 @@ func TUIUpdateSummary(name string, files int, locallyModified bool) Summary {
 // update whose folder changed after it was applied.
 func TUIUndoUpdateSummary(name, saved string) Summary {
 	return Summary{
-		Question: fmt.Sprintf("¿Deshacer la actualización de %s?", name),
+		Question: fmt.Sprintf("¿Deshacer la actualización de %s?", SafeLine(name)),
 		Lines: []string{
 			"La carpeta cambió después de actualizarla.",
-			fmt.Sprintf("Esos cambios no se pierden: quedan en la copia %s.", saved),
+			fmt.Sprintf("Esos cambios no se pierden: quedan en la copia %s.", SafeLine(saved)),
 		},
 	}
 }
 
 // TUIUpdated is what the TUI says after a version 1 update.
 func TUIUpdated(name string) string {
-	return fmt.Sprintf("Listo: %s está actualizada.", name)
+	return fmt.Sprintf("Listo: %s está actualizada.", SafeLine(name))
 }
 
 // TUIUpdateUndone is what the TUI says after undoing a version 1 update.
 func TUIUpdateUndone(name string) string {
-	return fmt.Sprintf("Listo: se deshizo la actualización de %s.", name)
+	return fmt.Sprintf("Listo: se deshizo la actualización de %s.", SafeLine(name))
 }
 
 // The Actualizaciones screen of S13: a row per update with an icon by risk
@@ -572,7 +580,7 @@ func TUIUpdatesTitle(n int) string { return fmt.Sprintf("Actualizaciones (%d)", 
 
 // TUIUpdateVersions tells from which version to which an update goes.
 func TUIUpdateVersions(from, to string) string {
-	return fmt.Sprintf("De la versión %s a la %s.", from, to)
+	return fmt.Sprintf("De la versión %s a la %s.", SafeLine(from), SafeLine(to))
 }
 
 // TUIUpdateWhat starts the panel's line of what an update changes.
@@ -582,7 +590,9 @@ func TUIUpdateWhat(labels []domain.Label) string { return "Qué cambia: " + TUIL
 func TUIUpdateFiles(n int) string { return fmt.Sprintf("Archivos que cambian (%d):", n) }
 
 // TUIUpdateBlocked tells why an update cannot be applied.
-func TUIUpdateBlocked(reason string) string { return fmt.Sprintf("No se puede aplicar: %s.", reason) }
+func TUIUpdateBlocked(reason string) string {
+	return fmt.Sprintf("No se puede aplicar: %s.", SafeLine(reason))
+}
 
 // TUIExcluded is an update applying all leaves out, and why.
 type TUIExcluded struct{ Name, Reason string }
@@ -597,7 +607,7 @@ func TUIApplyAllSummary(included []string, excluded []TUIExcluded) Summary {
 	if len(excluded) > 0 {
 		out := make([]string, 0, len(excluded))
 		for _, e := range excluded {
-			out = append(out, fmt.Sprintf("%s (%s)", e.Name, e.Reason))
+			out = append(out, fmt.Sprintf("%s (%s)", SafeLine(e.Name), SafeLine(e.Reason)))
 		}
 		s.Lines = append(s.Lines, fmt.Sprintf("Quedan fuera: %s.", JoinNames(out)))
 	}
@@ -635,6 +645,7 @@ var updateDid = map[domain.HistoryAction]string{
 
 // TUIUpdateDid tells what a version 1 journal line did to the skill name.
 func TUIUpdateDid(action domain.HistoryAction, name string) string {
+	name = SafeLine(name)
 	if f, ok := updateDid[action]; ok {
 		return fmt.Sprintf(f, name)
 	}
@@ -714,7 +725,7 @@ func TUIAgo(at, now time.Time) string {
 // TUIHistoryLine is a Historial line: what was done, when, and whether it
 // can be undone.
 func TUIHistoryLine(did, ago string, undoable bool) string {
-	line := did + " — " + ago
+	line := SafeLine(did) + " — " + SafeLine(ago)
 	if undoable {
 		line += " — " + TUIHistoryUndoable
 	}

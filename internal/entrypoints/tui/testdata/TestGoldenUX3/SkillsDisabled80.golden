@@ -1,5 +1,6 @@
 skillhub   1 Skills (17)  2 Actualizar  3 Instalar  4 Salud (26)
 17 skills · 12 activas · 5 desactivadas · 0 con actualización · 11 con problemas
+Visibles: 14 · sin agente: 3 (4 desactivadas visibles, 2 activas sin agente)
 ╭──────────────────────────────────────────────────────────────────────────────╮
 │ Skills · desactivadas (5)
 │ ⚠ accessibility                                                  enlace roto
@@ -21,10 +22,9 @@ skillhub   1 Skills (17)  2 Actualizar  3 Instalar  4 Salud (26)
 │
 │ accessibility
 │
+│ En skillhub: desactivada (a mano en OFF/)
 │ Disponible en: Codex, OpenCode y Pi
-│ Origen: owner/accessibility
-│ Tiene un enlace que no lleva a ninguna parte.
-│ Desactivarla de verdad la guarda aparte, donde ningún agente la ve, junto
+│   Codex, OpenCode y Pi: directamente, sin enlace
 ╰──────────────────────────────────────────────────────────────────────────────╯
 o desactivarla de verdad • enter ver todo • x ignorar • / buscar • f filtrar • g
 ver por agente • ? ayuda • q salir

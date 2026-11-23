@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"charm.land/bubbles/v2/table"
 	"charm.land/bubbles/v2/textinput"
@@ -29,6 +30,7 @@ const (
 	modeRecover
 	modeFilter
 	modeSkillDetail
+	modeSkillDocument
 	modeDiff
 	modeConfirmApply
 	modeConfirmApplyAll
@@ -45,6 +47,8 @@ const (
 	modeCanonical
 	// The UX3 modes (nav.go, checks.go).
 	modeAgentFilter
+	modeCompareAgents
+	modeCompareSkills
 	modeChecks
 	// modeUnignore shows the check boxes of the ignored skills (UX4).
 	modeUnignore
@@ -58,9 +62,12 @@ type dataLoadedMsg struct {
 	managedPending bool
 	parked         []app.ParkedSkill
 	visibility     map[string][]string
+	sightings      map[string][]app.Sighting
 	skills         []domain.Skill
 	ignored        []app.IgnoredSkill
 	candidates     []domain.UpdateCandidate
+	lastCheck      time.Time
+	unchecked      []app.UncheckedSkill
 	history        []domain.HistoryEntry
 	operations     map[string]app.OperationView
 	settings       domain.Settings
@@ -141,6 +148,7 @@ type Model struct {
 	// visibility names, per skill ID, the harnesses that see it; nil when
 	// the app could not tell, and the panel falls back to the locations.
 	visibility map[string][]string
+	sightings  map[string][]app.Sighting
 	// actions are, per skill ID, what the app can plan for it now: the
 	// panel offers only those (L83). nil when the app could not tell, and
 	// then no write action is offered.
@@ -156,9 +164,12 @@ type Model struct {
 	listTop int
 	// details shows the technical detail of the confirmation on screen,
 	// under its plain summary (S13).
-	details     bool
-	filterInput textinput.Model
-	selectedSk  domain.Skill
+	details       bool
+	filterInput   textinput.Model
+	selectedSk    domain.Skill
+	docView       app.SkillDocument
+	docScroll     int
+	docReturnMode viewMode
 	// allRows are the Skills rows before the filters; skillRows are the
 	// ones shown. stateFilter (f) and agentFilter (g, a harness id) keep
 	// only some of them.
@@ -166,13 +177,24 @@ type Model struct {
 	stateFilter text.SkillFilter
 	agentFilter string
 	// agentCursor is the cursor of the agent filter's list.
-	agentCursor int
+	agentCursor         int
+	compareFirst        string
+	compareA            string
+	compareB            string
+	compareSingle       bool
+	compareScroll       int
+	skillComp           app.SkillComparison
+	skillCompScroll     int
+	skillCompReturnMode viewMode
+	overviewFindings    []app.Finding
 	// back is the tab Historial or Ajustes return to with esc.
 	back Screen
 	// last is the operation z undoes.
 	last lastOp
 
 	candidates   []domain.UpdateCandidate
+	lastCheck    time.Time
+	unchecked    []app.UncheckedSkill
 	updateRows   []UpdateRow
 	updatesTable table.Model
 	updatesTop   int
@@ -284,6 +306,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.seq == m.actionsSeq {
 			m.actions = msg.actions
 			m.health = msg.health
+			m.overviewFindings = msg.findings
 			m.actionsPending = false
 			// The problems filter and the summary count broken links.
 			m.refreshTables()
@@ -368,7 +391,10 @@ func (m *Model) handleDataLoaded(msg dataLoadedMsg) *Model {
 	m.ignored = msg.ignored
 	m.parked = msg.parked
 	m.visibility = msg.visibility
+	m.sightings = msg.sightings
 	m.candidates = msg.candidates
+	m.lastCheck = msg.lastCheck
+	m.unchecked = msg.unchecked
 	m.history = msg.history
 	m.operations = msg.operations
 	m.settings = msg.settings
@@ -516,10 +542,21 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case modeEditInterval:
 		return m.handleEditIntervalKey(msg)
 	case modeSkillDetail:
+		if k == keySkillDocument {
+			return m.openSkillDocument(m.selectedSk, modeSkillDetail)
+		}
+		if k == keyCompareSkills {
+			if first, second, ok := m.homonymPair(m.selectedSk.ID); ok {
+				return m.openCompareSkills(first, second, modeSkillDetail)
+			}
+			return m, nil
+		}
 		if k == "esc" || k == "enter" || k == "q" {
 			m.mode = modeNormal
 		}
 		return m, nil
+	case modeSkillDocument:
+		return m.handleDocumentKey(k)
 	case modeDiff:
 		return m.handleDiffKey(k, msg)
 	case modeConfirmApply:
@@ -540,6 +577,10 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.handleChooseKey(k)
 	case modeAgentFilter:
 		return m.handleAgentFilterKey(k)
+	case modeCompareAgents:
+		return m.handleCompareKey(k)
+	case modeCompareSkills:
+		return m.handleCompareSkillsKey(k)
 	case modeChecks:
 		return m.handleChecksKey(k)
 	case modeUnignore:
@@ -645,7 +686,7 @@ func (m *Model) handleDiffKey(k string, msg tea.KeyPressMsg) (tea.Model, tea.Cmd
 			return m, nil
 		}
 		if m.activeCandidate.State != domain.CandidatePending {
-			m.status = fmt.Sprintf(msgBlockedNoApply, m.activeCandidate.ID, text.BlockReason(m.activeCandidate.BlockReason))
+			m.status = fmt.Sprintf(msgBlockedNoApply, text.SafeLine(m.activeCandidate.ID), text.BlockReason(m.activeCandidate.BlockReason))
 			return m, nil
 		}
 		m.details = false
@@ -752,6 +793,12 @@ func (m *Model) handleSkillsKey(k string, msg tea.KeyPressMsg) (tea.Model, tea.C
 			m.mode = modeSkillDetail
 		}
 		return m, nil
+	case keySkillDocument:
+		if sk, ok := m.selectedSkill(); ok {
+			m.selectedSk = sk
+			return m.openSkillDocument(sk, modeNormal)
+		}
+		return m, nil
 	case "x":
 		if row, ok := m.selectedRow(); ok && row.Ignored && !m.busy {
 			return m, m.unignoreSkill(row.ID)
@@ -786,7 +833,7 @@ func (m *Model) handleUpdatesKey(k string, msg tea.KeyPressMsg) (tea.Model, tea.
 		}
 		if c, ok := m.selectedCandidate(); ok {
 			if c.State != domain.CandidatePending {
-				m.status = fmt.Sprintf(msgBlockedNoApply, c.ID, text.BlockReason(c.BlockReason))
+				m.status = fmt.Sprintf(msgBlockedNoApply, text.SafeLine(c.ID), text.BlockReason(c.BlockReason))
 				return m, nil
 			}
 			m.activeCandidate = c
@@ -897,7 +944,16 @@ func (m *Model) View() tea.View {
 	case modeHelp:
 		body = m.renderHelp(boxW)
 	case modeSkillDetail:
-		body = m.styles.box.Width(boxW).Render(PresentSkillDetail(m.selectedSk))
+		activity := app.SkillActivity(m.history, m.operations, m.selectedSk)
+		body = m.styles.box.Width(boxW).Render(PresentSkillDetailWithActivity(
+			m.selectedSk,
+			m.sightings[m.selectedSk.ID],
+			m.app.AgentName,
+			activity,
+			m.app.Now(),
+		))
+	case modeSkillDocument:
+		body = m.renderSkillDocument(boxW)
 	case modeDiff:
 		body = m.renderDiffView(boxW)
 	case modeConfirmApply:
@@ -914,6 +970,10 @@ func (m *Model) View() tea.View {
 		body = m.renderChoose(boxW)
 	case modeAgentFilter:
 		body = m.renderAgentFilter(boxW)
+	case modeCompareAgents:
+		body = m.renderCompareAgents(boxW)
+	case modeCompareSkills:
+		body = m.renderCompareSkills(boxW)
 	case modeChecks:
 		body = m.renderChecks(boxW)
 	case modeUnignore:
@@ -966,8 +1026,8 @@ func (m *Model) renderConfirmApply(boxW int) string {
 		return m.renderSummary(boxW, sum)
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "Destino:   %s\n", c.Target)
-	fmt.Fprintf(&b, "Candidato: %s\n", c.ID)
+	fmt.Fprintf(&b, "Destino:   %s\n", text.SafeLine(c.Target))
+	fmt.Fprintf(&b, "Candidato: %s\n", text.SafeLine(c.ID))
 	fmt.Fprintf(&b, "Árbol:     %s (commit %s)\n", ShortSHA(c.ToSHA), ShortSHA(c.ToCommit))
 	fmt.Fprintf(&b, "Archivos:  %d\n", len(c.FileChanges))
 	fmt.Fprintf(&b, "Etiquetas: %s\n", formatLabels(c.Labels))
@@ -983,13 +1043,13 @@ func (m *Model) renderConfirmUndo(boxW int) string {
 	sum := text.TUIUndoUpdateSummary(targetName(m.pendingUndoReq.Target), m.pendingUndoSaved)
 	if !m.pendingUndoReq.Confirm {
 		// z asks before undoing an update (UX3).
-		sum = text.TUIUndoUpdateAsk(targetName(m.pendingUndoReq.Target))
+		sum = text.TUIUndoUpdateAsk(text.SafeLine(targetName(m.pendingUndoReq.Target)))
 	}
 	if !m.details {
 		return m.renderSummary(boxW, sum)
 	}
-	detail := fmt.Sprintf(msgConfirmUndoPrompt, m.pendingUndoSaved) + "\n" +
-		fmt.Sprintf("Destino: %s\nSnapshot: %s", m.pendingUndoReq.Target, m.pendingUndoReq.SnapshotID)
+	detail := fmt.Sprintf(msgConfirmUndoPrompt, text.SafeLine(m.pendingUndoSaved)) + "\n" +
+		fmt.Sprintf("Destino: %s\nSnapshot: %s", text.SafeLine(m.pendingUndoReq.Target), text.SafeLine(m.pendingUndoReq.SnapshotID))
 	return m.renderSummary(boxW, sum) + "\n" + m.styles.frame.Width(boxW).Render(detail)
 }
 
@@ -1030,6 +1090,7 @@ func helpLines() []string {
 		text.TUIHelpLists,
 		text.TUIHelpSkills,
 		text.TUIHelpSkills2,
+		text.TUISkillsExclusions,
 		text.TUIHelpUpdates,
 		text.TUIHelpDiff,
 		text.TUIHelpInstall,
@@ -1037,7 +1098,6 @@ func helpLines() []string {
 		text.TUIHelpHistory,
 		text.TUIHelpSetting,
 		text.TUIHelpPlan,
-		"",
 		msgHelpClose,
 	}
 }
@@ -1080,8 +1140,19 @@ func (m *Model) renderFooter() string {
 		keys = text.TUIConfirmFooterShort
 	case modeNormal, modeFilter, modeEditInterval:
 		keys = m.screenKeys()
+	case modeSkillDetail:
+		keys = text.TUIKeysSkillDetail
+		if _, _, ok := m.homonymPair(m.selectedSk.ID); ok {
+			keys = text.TUIKeysSkillDetailCompare
+		}
+	case modeSkillDocument:
+		keys = text.TUIKeysDocument
 	case modeAgentFilter:
 		keys = text.TUIKeysAgentFilter
+	case modeCompareAgents:
+		keys = text.TUIKeysCompareAgents
+	case modeCompareSkills:
+		keys = text.TUIKeysCompareSkills
 	case modeChecks, modeInstallTargets, modeUnignore:
 		keys = text.TUIKeysChecks
 	}
@@ -1165,7 +1236,7 @@ func (m *Model) refreshTables() {
 	})
 	upRows := make([]table.Row, 0, len(m.updateRows))
 	for _, r := range m.updateRows {
-		upRows = append(upRows, table.Row{r.Target, r.CandidateID, r.ToCommit, r.State, r.Labels})
+		upRows = append(upRows, table.Row{text.SafeLine(r.Target), text.SafeLine(r.CandidateID), r.ToCommit, r.State, r.Labels})
 	}
 	m.updatesTable.SetRows(upRows)
 
@@ -1181,7 +1252,7 @@ func (m *Model) refreshTables() {
 	})
 	hiRows := make([]table.Row, 0, len(m.historyRows))
 	for _, r := range m.historyRows {
-		hiRows = append(hiRows, table.Row{r.At, r.Action, r.Target, r.Versions, r.SnapshotID, r.Detail})
+		hiRows = append(hiRows, table.Row{r.At, r.Action, text.SafeLine(r.Target), r.Versions, text.SafeLine(r.SnapshotID), text.SafeLine(r.Detail)})
 	}
 	m.historyTable.SetRows(hiRows)
 }
@@ -1234,6 +1305,14 @@ func loadDataCmd(a *app.App) tea.Cmd {
 		if err != nil {
 			return dataLoadedMsg{err: err}
 		}
+		lastCheck, err := a.LastSuccessfulCheck()
+		if err != nil {
+			return dataLoadedMsg{err: err}
+		}
+		unchecked, err := a.UncheckedSkills(ctx)
+		if err != nil {
+			return dataLoadedMsg{err: err}
+		}
 		hist, err := a.History()
 		if err != nil {
 			return dataLoadedMsg{err: err}
@@ -1254,19 +1333,27 @@ func loadDataCmd(a *app.App) tea.Cmd {
 		if err != nil {
 			return dataLoadedMsg{err: err}
 		}
-		// Who sees each skill only completes the Skills panel: when the
-		// graph cannot be built, the panel tells the locations instead.
+		// Who sees each skill, and why, only completes the Skills panel and
+		// the full view: when the graph cannot be built, they tell the
+		// locations instead.
 		vis, err := a.Visibility(ctx)
 		if err != nil {
 			vis = nil
 		}
+		sightings, err := a.Sightings(ctx)
+		if err != nil {
+			sightings = nil
+		}
 		return dataLoadedMsg{
-			operations: operations(ctx, a, hist),
+			operations: a.Operations(ctx, hist),
 			visibility: vis,
+			sightings:  sightings,
 			parked:     parked,
 			skills:     skills,
 			ignored:    ignored,
 			candidates: cands,
+			lastCheck:  lastCheck,
+			unchecked:  unchecked,
 			history:    hist,
 			settings:   st,
 			bgStatus:   bg,
@@ -1277,9 +1364,10 @@ func loadDataCmd(a *app.App) tea.Cmd {
 // actionsLoadedMsg carries what each skill admits and the Salud counter,
 // from the load seq.
 type actionsLoadedMsg struct {
-	seq     int
-	actions map[string]app.SkillActions
-	health  int
+	seq      int
+	actions  map[string]app.SkillActions
+	findings []app.Finding
+	health   int
 }
 
 // actionsCmd reads, on one observation, what each skill admits and what
@@ -1298,26 +1386,8 @@ func actionsCmd(a *app.App, seq int) tea.Cmd {
 				n++
 			}
 		}
-		return actionsLoadedMsg{seq: seq, actions: ov.Actions, health: n}
+		return actionsLoadedMsg{seq: seq, actions: ov.Actions, findings: ov.Findings, health: n}
 	}
-}
-
-// operations reads what each version 2 journal line did, for Historial. A
-// line whose snapshot cannot be read is told without its skill.
-func operations(ctx context.Context, a *app.App, hist []domain.HistoryEntry) map[string]app.OperationView {
-	out := map[string]app.OperationView{}
-	for _, h := range hist {
-		if !strings.HasPrefix(h.Target, "v2:") || h.SnapshotID == "" {
-			continue
-		}
-		if _, done := out[h.SnapshotID]; done {
-			continue
-		}
-		if op, err := a.Operation(ctx, h.SnapshotID); err == nil {
-			out[h.SnapshotID] = op
-		}
-	}
-	return out
 }
 
 func checkNowCmd(a *app.App) tea.Cmd {

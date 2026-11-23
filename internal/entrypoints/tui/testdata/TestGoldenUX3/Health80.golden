@@ -2,28 +2,28 @@ skillhub   1 Skills (17)  2 Actualizar  3 Instalar  4 Salud (26)
 12 skills de gentle-ai: las gestiona gentle-ai, skillhub no las toca.
 Buscar no cambia nada: solo se repara lo que elijas y confirmes.
 ╭──────────────────────────────────────────────────────────────────────────────╮
-│ Hallazgos (36)
-│ Enlaces rotos (19)
-│ · domain-driven-design
-│ · web-quality-audit
-│ · accessibility
-│ · domain-driven-design
-│ · accessibility
-│ · domain-driven-design
-│ · git-guardrails-claude-code
-│ · accessibility
-│ · domain-driven-design
-│ · git-guardrails-claude-code
+│ 21 skills afectadas · 36 hallazgos
+│ ▾ accessibility                                                  8 hallazgos
+│ · enlace roto                                                          Droid
+│ · enlace roto                                                          Junie
+│ · enlace roto                                                      Kilo Code
+│ · enlace roto                                                       Kiro CLI
+│ · enlace roto                                                             Pi
+│ · enlace roto                                                      Qwen Code
+│ · apagada pero visible                                  Codex, OpenCode y Pi
+│ · nombre repetido
+│ ▸ domain-driven-design                                           7 hallazgos
+│ ▸ git-guardrails-claude-code                                     5 hallazgos
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭──────────────────────────────────────────────────────────────────────────────╮
-│ Enlaces rotos (19)
-│ 19 enlaces rotos: agentes que apuntan a una skill que ya no existe. Arreglo
-│ sugerido: borrar el enlace.
+│ accessibility
 │
-│ domain-driven-design
+│ 1 enlace roto: apunta a una skill que ya no existe. Arreglo sugerido: borrar
+│ el enlace.
+│ Agentes: Droid
 │ Dónde:
-│   ~/.config/devin/skills/domain-driven-design
-│ Hallazgo: broken_link:.config/devin/skills/domain-driven-design
+│   ~/.factory/skills/accessibility
+│ Hallazgo: broken_link:.factory/skills/accessibility
 │
 │ [enter] Ver cómo repararlo
 ╰──────────────────────────────────────────────────────────────────────────────╯

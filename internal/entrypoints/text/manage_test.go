@@ -388,3 +388,185 @@ func TestTheWebRefusalsExplainThemselves(t *testing.T) {
 		t.Errorf("an http site = %q, want it told to use https", msg)
 	}
 }
+
+// assertEscaped fails when out prints a character of hostile as it is, or
+// lacks hostile's escaped form.
+func assertEscaped(t *testing.T, what, out string) {
+	t.Helper()
+	if strings.ContainsAny(out, "\r\x1b"+rlo) {
+		t.Errorf("%s prints third-party text as it is:\n%q", what, out)
+	}
+	if !strings.Contains(out, hostileShown) {
+		t.Errorf("%s lacks %q:\n%s", what, hostileShown, out)
+	}
+}
+
+// Every value a plan takes from a skill, a folder, a link or a process
+// prints escaped (A28), so a plan cannot hide what it does; ordinary names
+// print as they are.
+func TestThePlansEscapeThirdPartyText(t *testing.T) {
+	h := hostile
+	links := []app.LinkChange{{Path: "/l/" + h, Target: "../" + h, Harnesses: []string{"codex" + h}}}
+	seen := []app.Sighting{{Harness: "codex" + h, Kind: "direct", Entry: "/e/" + h}}
+	toggle := &app.TogglePreview{
+		Skills: []app.SkillChange{
+			{Key: "uno" + h, From: "/f/" + h, To: "/t/" + h, RemovedLinks: links, CreatedLinks: links,
+				RestoreLinks: []domain.LinkRecord{{Path: "/r/" + h, Target: "../" + h}}, StillVisible: seen},
+			{Key: "dos" + h},
+		},
+		StillVisible: seen, Visible: seen, SharesDirWith: []string{"gemini" + h}, Kept: []string{"/k/" + h},
+	}
+	steps := []app.Step{
+		{Kind: "move", Src: "/s/" + h, Dst: "/d/" + h}, {Kind: "link", Path: "/p/" + h, Target: "../" + h},
+		{Kind: "lockRemove", Name: "n" + h}, {Kind: "otro" + h, Src: h, Dst: h, Path: h, Name: h},
+	}
+	plans := map[string]app.Proposal{
+		"remove": {
+			Request: app.Request{Action: app.ActionRemove, Key: "k" + h}, Steps: steps, Targets: []string{"codex" + h},
+			Remove: &app.RemovePreview{
+				Key: "k" + h, Folder: "/f/" + h, TreeSHA: "abc" + h, Links: links, LockEntry: &app.RemovedEntry{Name: "n" + h},
+				Homonyms:          []app.Homonym{{Path: "/h/" + h, Harnesses: []string{"codex" + h}}, {Path: "/o/" + h, Profile: "omni" + h}},
+				KeptLinks:         []app.KeptLink{{Path: "/kl/" + h, Target: "../" + h, Zone: "zona" + h}, {Path: "/kp/" + h, Profile: "omni" + h}},
+				PendingCandidates: []string{"cand" + h},
+			},
+			Running: []app.Process{{PID: 42, Harness: "claude-code" + h, Command: "claude --x " + h}},
+			Reload:  []string{"codex" + h},
+		},
+		"disable": {Request: app.Request{Action: app.ActionDisable, Key: "k" + h}, Toggle: toggle},
+		"unlink": {
+			Request: app.Request{Action: app.ActionUnlink, Key: "k" + h, Harness: "codex" + h},
+			Toggle:  &app.TogglePreview{StillVisible: seen},
+		},
+		"install": {
+			Request: app.Request{Action: app.ActionInstall},
+			Install: &app.InstallPreview{
+				Key: "k" + h, Source: "acme/x" + h, Commit: "c0ffee" + h, SkillPath: "skills/" + h, TreeSHA: "abc" + h,
+				StagedPath: "/st/" + h, StorePath: "/store/" + h, Links: links,
+				LockEntry: []byte(`{"source": "acme/x` + rlo + `"}`), ReplacedEntry: []byte(`{"source": "old` + rlo + `"}`),
+			},
+		},
+		"web install": {
+			Request: app.Request{Action: app.ActionInstall},
+			Install: &app.InstallPreview{Key: "k" + h, Source: "sitio" + h, Site: "sitio" + h, SourceURL: "https://sitio/" + h},
+		},
+		"repair": {
+			Request: app.Request{Action: app.ActionRepair, Finding: "f" + h, Repair: "adopt"},
+			Repair: &app.RepairPreview{
+				Canonical: "/c/" + h, Moved: []app.Move{{From: "/m/" + h, To: "/n/" + h}}, RemovedLinks: links, CreatedLinks: links,
+				RemovedCopies: []app.CopyChange{{Path: "/rc/" + h, TreeSHA: "abc" + h}},
+				Copies: []app.CopyDiff{
+					{Path: "/cd/" + h, Added: []string{"a" + h}, Removed: []string{"r" + h}, Changed: []string{"c" + h}},
+					{Path: "/same/" + h},
+				},
+				LockEntry: "n" + h, Kept: []string{"/k/" + h}, Toggle: toggle,
+			},
+		},
+		"undo": {Request: app.Request{Action: app.ActionUndo}, Undo: &app.UndoPreview{Of: "v2:remove" + h, Snapshot: "snap" + h}},
+	}
+	for name, p := range plans {
+		assertEscaped(t, "the "+name+" plan", text.Proposal(p))
+	}
+	got := text.Proposal(plans["remove"])
+	for _, want := range []string{
+		"  1. mover /s/" + hostileShown + " a /d/" + hostileShown + "\n",
+		"Entrada del lock que se quita: «n" + hostileShown + "»\n",
+		"  claude-code" + hostileShown + " (proceso 42, claude --x " + hostileShown + ")\n",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("the remove plan lacks %q:\n%s", want, got)
+		}
+	}
+
+	ordinary := text.Proposal(app.Proposal{
+		Request: app.Request{Action: app.ActionRemove, Key: "canción-ñandú"},
+		Remove:  &app.RemovePreview{Key: "canción-ñandú", Folder: "/h/.agents/skills/canción-ñandú 🎉", TreeSHA: "abc"},
+	})
+	for _, want := range []string{"Eliminar canción-ñandú\n", "Carpeta (activa): /h/.agents/skills/canción-ñandú 🎉 (árbol abc)\n"} {
+		if !strings.Contains(ordinary, want) {
+			t.Errorf("an ordinary plan lacks %q:\n%s", want, ordinary)
+		}
+	}
+}
+
+// The install review shows file names, frontmatter keys and diff lines
+// from upstream escaped: the file list keeps its column and a file name
+// stays on its header line.
+func TestTheInstallReviewEscapesThirdPartyText(t *testing.T) {
+	h := hostile
+	rev := app.Revision{Input: "acme/x" + h, Commit: "c0ffee" + h}
+	rev.Prepared.Resolved.Key = "k" + h
+	rev.Prepared.TreeSHA = "abc" + h
+	rev.Prepared.FileChanges = []domain.FileChange{{Path: "a" + h + ".md", Change: domain.ChangeAdded, NewMode: "100644"}}
+	rev.Prepared.FrontmatterDelta.Changed = []string{"clave" + h}
+	diffs := []app.FileDiff{
+		{Path: "a\n" + h + ".md", Unified: "--- a/a\n" + h + ".md\n+++ b/a\n" + h + ".md\n@@ -0,0 +1 @@\n+línea" + h + "\n"},
+		{Path: "b" + h + ".png", Binary: true},
+	}
+
+	got := text.InstallReview(rev, diffs)
+
+	assertEscaped(t, "the install review", got)
+	for _, want := range []string{
+		"  a" + hostileShown + ".md\tañadido 100644\n",
+		"Frontmatter: clave" + hostileShown + "\n",
+		`--- a/a\n` + hostileShown + ".md\n" + `+++ b/a\n` + hostileShown + ".md\n",
+		"+línea" + hostileShown + "\n",
+		"\nb" + hostileShown + ".png\n(archivo binario",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("the install review lacks %q:\n%s", want, got)
+		}
+	}
+	rev.Site, rev.Repo = "sitio"+h, "sitio"+h
+	assertEscaped(t, "the install review of a website", text.InstallReview(rev, nil))
+}
+
+// Doctor's findings, results, recoveries, warnings and refusals print the
+// names, paths and identifiers they carry escaped.
+func TestTheOtherManageTextsEscapeThirdPartyText(t *testing.T) {
+	h := hostile
+	texts := map[string]string{
+		"Findings": text.Findings([]app.Finding{{ID: "f" + h, Kind: "broken_link", Skill: "s" + h,
+			Paths: []string{"/p/" + h}, Target: "../" + h, Harnesses: []string{"codex" + h}}}),
+		"Reinstall":                text.Reinstall(&app.Reinstall{Key: "k" + h, Input: "acme/x" + h}),
+		"Reinstall without GitHub": text.Reinstall(&app.Reinstall{Key: "k" + h, SourceType: "local" + h, Source: "/s/" + h}),
+		"Done": text.Done(app.Result{Proposal: app.Proposal{Operation: "v2:remove", Reload: []string{"codex" + h}},
+			SnapshotID: "snap" + h, Superseded: []string{"cand" + h}}),
+		"Recovery":                 text.Recovery(app.ManagedRecovery{Found: true, Committed: true, SnapshotID: "snap" + h}),
+		"Recovery rolled back":     text.Recovery(app.ManagedRecovery{Found: true, RolledBack: true, PlanID: "plan" + h}),
+		"PlanID":                   text.PlanID("plan" + h),
+		"PlanChanged":              text.PlanChanged("plan" + h),
+		"UndoLineNotFound":         text.UndoLineNotFound("v2:x"+h, "snap"+h),
+		"SupersedeWarning":         text.SupersedeWarning(fmt.Errorf("%w: lock %s", app.ErrCandidatesNotSuperseded, h)),
+		"another SupersedeWarning": text.SupersedeWarning(errors.New("x" + h)),
+		"RecoverFailed":            text.RecoverFailed(errors.New("x" + h)),
+		"Step":                     text.Step(app.Step{Kind: "otro" + h, Src: h}),
+		"Sighting":                 text.Sighting(app.Sighting{Harness: "codex" + h, Kind: "link", Entry: "/e/" + h}),
+	}
+	for name, got := range texts {
+		assertEscaped(t, name, got)
+	}
+
+	refusals := []struct {
+		kind    error
+		req     app.Request
+		related []string
+	}{
+		{app.ErrNotFound, app.Request{Key: "k" + h}, nil},
+		{app.ErrKeyReinstalled, app.Request{Key: "k" + h}, []string{"/p/" + h}},
+		{app.ErrKeyExists, app.Request{Install: &app.InstallRequest{Revision: app.Revision{Key: "k" + h}}}, []string{"/p/" + h}},
+		{app.ErrUnknownHarness, app.Request{Harness: "h" + h}, nil},
+		{app.ErrNotLinked, app.Request{Key: "k" + h, Harness: "codex" + h}, nil},
+		{app.ErrNeighbourParked, app.Request{Key: "k" + h}, []string{"vecina" + h}},
+		{app.ErrSourceMismatch, app.Request{Install: &app.InstallRequest{Revision: app.Revision{Key: "k" + h, Repo: "o/r" + h}}}, nil},
+		{app.ErrRepoNotFound, app.Request{Install: &app.InstallRequest{Revision: app.Revision{Input: "o/r" + h}}}, nil},
+	}
+	for _, r := range refusals {
+		msg, ok := text.Refusal(&app.RefusalError{Kind: r.kind, Related: r.related}, r.req)
+		if !ok {
+			t.Errorf("%v has no message", r.kind)
+			continue
+		}
+		assertEscaped(t, fmt.Sprintf("the refusal %v", r.kind), msg)
+	}
+}

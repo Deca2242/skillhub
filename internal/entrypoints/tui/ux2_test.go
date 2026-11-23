@@ -446,9 +446,9 @@ func TestInstallExplainsEachStep(t *testing.T) {
 	}
 }
 
-// Doctor groups its findings by kind, with a count and a plain line per
-// kind; gentle-ai's copies are one folded line; the repairs are told in
-// plain words.
+// Doctor groups its findings, by skill since INV10 (health_groups_test.go):
+// the first row's panel tells its finding in a plain line; gentle-ai's
+// copies are one folded line; the repairs are told in plain words.
 func TestDoctorGroupsItsFindings(t *testing.T) {
 	mc := newMachine(t)
 	a := mc.newApp()
@@ -463,13 +463,17 @@ func TestDoctorGroupsItsFindings(t *testing.T) {
 	if count["broken_link"] < 2 || count["managed_by_gentle_ai"] < 2 {
 		t.Fatalf("the fixture lacks findings to group: %v", count)
 	}
+	first := healthRowOrder(t, a)[0]
+	if first.Kind != "broken_link" {
+		t.Fatalf("the first row is %s, want a broken link", first.ID)
+	}
 	m := openSized(t, a, 220, 80)
 	pressRun(m, "4")
 	got := screen(m)
 	for _, want := range []string{
-		fmt.Sprintf("%d enlaces rotos: agentes que apuntan a una skill que ya no existe. Arreglo sugerido: borrar el enlace.", count["broken_link"]),
+		"1 enlace roto: apunta a una skill que ya no existe. Arreglo sugerido: borrar el enlace.",
 		fmt.Sprintf("%d skills de gentle-ai: las gestiona gentle-ai, skillhub no las toca.", count["managed_by_gentle_ai"]),
-		fmt.Sprintf("Enlaces rotos (%d)", count["broken_link"]),
+		"Hallazgo: " + first.ID,
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("Doctor lacks %q:\n%s", want, got)
@@ -477,13 +481,6 @@ func TestDoctorGroupsItsFindings(t *testing.T) {
 	}
 	if strings.Contains(got, text.FindingKind("managed_by_gentle_ai")) {
 		t.Errorf("gentle-ai's copies are listed one by one:\n%s", got)
-	}
-	first := findings[0]
-	for _, f := range findings {
-		if f.Kind == "broken_link" {
-			first = f
-			break
-		}
 	}
 	offer, err := a.Repairs(t.Context(), first.ID)
 	if err != nil || len(offer.Repairs) == 0 {

@@ -75,13 +75,20 @@ ayuda con `--help`.
 
 | Quieres… | En la interfaz interactiva | En la línea de comandos |
 |---|---|---|
-| Ver tus skills y qué agentes las ven | pestaña **1 Skills**: `g` filtra por agente, `f` por estado y `/` busca | `skillhub scan` |
+| Ver tus skills y qué agentes las ven | pestaña **1 Skills**: `g` filtra por agente, `f` por estado y `/` busca | `skillhub scan` y `skillhub skills show <skill>` |
 | Saber si hay actualizaciones y aplicarlas | pestaña **2 Actualizar**: `enter` muestra los cambios y `a` aplica; `r` revisa ahora | `skillhub check` y `skillhub updates` |
 | Instalar, activar, desactivar, enlazar o eliminar una skill | pestaña **1 Skills** (`d` desactiva, `a` activa, `e` elimina, `l` elige agentes) y pestaña **3 Instalar** | `skillhub skills` |
 | Encontrar y reparar enlaces rotos y duplicados | pestaña **4 Salud**: `enter` muestra cómo repararlo | `skillhub doctor` y `skillhub doctor fix` |
 | Buscar skills en skills.sh, el catálogo público | no está en la interfaz | `skillhub skills search` y `skillhub skills popular` |
 | Ver lo que se hizo y deshacerlo | `h` abre el Historial; `z` deshace lo último | `skillhub history` y `skillhub undo` |
 | Recibir un aviso cuando haya actualizaciones | `c` abre los Ajustes, que dicen si está activa | `skillhub background enable` (opcional) |
+
+### Ejemplo: consultar el detalle de una skill
+
+```bash
+skillhub skills show agent-browser         # estado, agentes que la ven y por qué, origen y actividad
+skillhub skills show agent-browser --json  # lo mismo en JSON, sin escapar
+```
 
 ### Ejemplo: revisar una actualización antes de aplicarla
 
@@ -251,6 +258,7 @@ skillhub background status                  dice si la revisión en segundo plan
 skillhub background enable [--dry-run]      activa la revisión en segundo plano
 skillhub background disable [--dry-run]     la desactiva y borra sus unidades de systemd
 
+skillhub skills show <skill> [--json]                  estado, agentes que la ven, origen y actividad
 skillhub skills install <origen> [--to <harness>...]   instala desde GitHub o un sitio web tras revisarla
 skillhub skills remove <skill>                         elimina una skill, activa o desactivada
 skillhub skills disable <skill>                        la desactiva en todos sus destinos gestionados
@@ -275,6 +283,19 @@ comas.
 `<skill>` es el nombre de la skill o su `id`: `lock:<nombre>`, `git:<ruta>` o `dir:<ruta>`, con la ruta
 relativa al home. Si un nombre corresponde a más de una skill, el comando se niega y lista los `id`:
 vuelve a ejecutarlo con el `id` que quieras.
+
+### Salida JSON de `skills show`
+
+`skillhub skills show <skill> --json` devuelve un objeto JSON con los valores crudos (sin escapar):
+
+- `id`, `name`, `aliases` (opcional), `description` (opcional): identidad y metadatos de la skill.
+- `skillhub_state`: estado en skillhub (`"active"`, `"disabled"`, `"disabled_by_hand"` o `"ignored"`).
+- `state` (opcional) e `issues` (opcional): estado de actualización e incidencias del inventario.
+- `origin`: origen (`kind`, y `lock` o `git_clone` según corresponda).
+- `sightings`: lista de agentes que la ven (`harness`, `harness_name`, `kind` y `entry`).
+- `locations`: ubicaciones detectadas en disco (`path`, `agent_id`, `kind`, `content_tree_sha`).
+- `activity`: historial de skillhub para esta skill (`at`, `action`, `target`, `v2`, y opcionalmente `operation` y `undo`).
+- `disabled_since` y `return_to` (opcionales): fecha y agentes de retorno cuando está desactivada con skillhub.
 
 ### Códigos de salida
 
@@ -451,9 +472,12 @@ destino que no lee el almacén directamente la ve por un enlace simbólico.
 - **Instalar:** cuatro pasos, y dice en cuál estás: (1) de dónde la traigo, de GitHub (`owner/repo…`) o
   de un sitio web que publica skills (`https://sitio[/ruta][@skill]`); (2) revisa lo que trae, con el
   semáforo, los archivos y el diff; (3) elige los agentes con casillas; (4) confirma.
-- **Salud:** los problemas agrupados por tipo, con un conteo y una línea que explica el problema y el
-  arreglo sugerido. Las copias de gentle-ai se resumen en una sola línea, porque skillhub no las toca.
-  `enter` muestra cómo reparar el hallazgo elegido.
+- **Salud:** los hallazgos se agrupan por skill; los que no tienen una skill asociada aparecen aparte.
+  Cada hallazgo explica el problema y, cuando corresponde, propone una reparación. Las copias de
+  gentle-ai se resumen en una sola línea, porque skillhub no las toca. `enter` muestra cómo reparar el
+  hallazgo elegido. Ante dos skills con el mismo nombre, `m` compara sus rutas, los agentes que las ven
+  y las diferencias entre archivos, sin modificar nada. El mismo atajo aparece en la ficha de la skill
+  cuando hay otra con el mismo nombre; `esc` vuelve a la vista anterior.
 - **Ajustes:** cada ajuste lleva una línea que dice qué hace. En «Ignoradas», `enter` abre una casilla
   por skill ignorada, todas marcadas: desmarca las que quieras volver a ver y confirma con `enter`. Un
   nombre de la lista que ya no corresponde a ninguna skill también aparece, para poder quitarlo.

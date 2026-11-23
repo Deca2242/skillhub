@@ -1,6 +1,7 @@
 skillhub   1 Skills (15)  2 Actualizar  3 Instalar  4 Salud (26)
 15 skills · 12 activas · 3 desactivadas · 0 con actualización · 10 con problemas
 · 2 ignoradas
+Visibles: 13 · sin agente: 2 (3 desactivadas visibles, 2 activas sin agente)
 ╭──────────────────────────────────────────────────────────────────────────────╮
 │ Skills · ignoradas (2)
 │ - domain-driven-design                                              ignorada
@@ -12,19 +13,18 @@ skillhub   1 Skills (15)  2 Actualizar  3 Instalar  4 Salud (26)
 │
 │
 │
-│
-│
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭──────────────────────────────────────────────────────────────────────────────╮
 │ domain-driven-design
-│ Ignorada: skillhub no la muestra ni la revisa. Tus agentes la siguen usando.
+│ Ignorada: skillhub no la muestra ni la revisa.
 │
 │ domain-driven-design
 │
+│ En skillhub: ignorada
 │ Disponible en: Codex, OpenCode y Pi
+│   Codex, OpenCode y Pi: directamente, sin enlace
 │ Origen: owner/domain-driven-design
-│
-│ [x] Dejar de ignorar   [enter] Ver todo
+│ Actividad en skillhub: sin actividad registrada
 ╰──────────────────────────────────────────────────────────────────────────────╯
 enter ver todo • x dejar de ignorar • / buscar • f filtrar • g ver por agente •
 ? ayuda • q salir

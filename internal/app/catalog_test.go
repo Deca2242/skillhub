@@ -84,9 +84,9 @@ func TestSearchCatalogMarksInstallableAndInstalledEntries(t *testing.T) {
 	}
 	want := []app.CatalogEntry{
 		{ID: "acme/skills/alpha", Source: "acme/skills", SkillID: "alpha", Name: "alpha", Installs: 900,
-			Installable: true, InstallSource: "acme/skills@alpha", Installed: true},
+			Installable: true, InstallSource: "acme/skills@alpha", Installed: true, InstalledSource: "acme/skills"},
 		{ID: "acme/skills/beta", Source: "acme/skills", SkillID: "beta", Name: "beta", Installs: 800,
-			Installable: true, InstallSource: "acme/skills@beta", Installed: true},
+			Installable: true, InstallSource: "acme/skills@beta", PossibleDuplicate: true, DuplicateOf: "beta"},
 		{ID: "vercel-labs/agent-skills/react-best", Source: "vercel-labs/agent-skills", SkillID: "react-best",
 			Name: "react-best", Installs: 700, Installable: true, InstallSource: "vercel-labs/agent-skills@react-best"},
 		// A website host installs through its /.well-known/agent-skills/
@@ -382,4 +382,99 @@ func TestPopularCatalogUsesStaleTopicsWithAWarning(t *testing.T) {
 	if !errors.Is(res.Stale, app.ErrCatalogOffline) || !slices.Equal(ids(res.Entries), []string{"acme/skills/gitflow"}) {
 		t.Errorf("popular = %v, stale %v; want the cached gitflow with a warning", ids(res.Entries), res.Stale)
 	}
+}
+
+func TestSearchCatalogMatchesByOriginAndFlagsPossibleDuplicates(t *testing.T) {
+	t.Run("lock entry distinguishes same origin from another origin", func(t *testing.T) {
+		f := newFixture(t)
+		f.installLock(map[string]map[string]string{"alpha": v1})
+		catalog := fakes.NewCatalog()
+		catalog.Set("alpha",
+			skill("acme/skills", "alpha", 900),
+			skill("other/repo", "alpha", 800),
+			skill("acme/skills", "other-skill", 700),
+		)
+
+		res, err := f.withCatalog(catalog).SearchCatalog(t.Context(), "alpha", 10, app.CatalogOptions{})
+		if err != nil {
+			t.Fatalf("SearchCatalog = %v", err)
+		}
+		want := []app.CatalogEntry{
+			{ID: "acme/skills/alpha", Source: "acme/skills", SkillID: "alpha", Name: "alpha", Installs: 900,
+				Installable: true, InstallSource: "acme/skills@alpha", Installed: true, InstalledSource: "acme/skills"},
+			{ID: "other/repo/alpha", Source: "other/repo", SkillID: "alpha", Name: "alpha", Installs: 800,
+				Installable: true, InstallSource: "other/repo@alpha", PossibleDuplicate: true, DuplicateOf: "alpha", DuplicateSource: "acme/skills"},
+			{ID: "acme/skills/other-skill", Source: "acme/skills", SkillID: "other-skill", Name: "other-skill", Installs: 700,
+				Installable: true, InstallSource: "acme/skills@other-skill"},
+		}
+		if !slices.Equal(res.Entries, want) {
+			t.Errorf("entries =\n%+v\nwant\n%+v", res.Entries, want)
+		}
+	})
+
+	t.Run("git clone remote normalizes to owner/repo", func(t *testing.T) {
+		for _, remote := range []string{
+			"https://github.com/Owner/Repo",
+			"https://github.com/owner/repo.git",
+			"https://github.com/owner/repo/",
+			"git@github.com:owner/repo.git",
+			"ssh://git@github.com/owner/repo.git",
+		} {
+			t.Run(remote, func(t *testing.T) {
+				f := newFixture(t)
+				clone := f.home.Path(".claude/skills/clone-skill")
+				f.home.WriteFile(".claude/skills/clone-skill/SKILL.md", "---\nname: clone-skill\ndescription: c\n---\n")
+				f.home.WriteFile(".claude/skills/clone-skill/.git/HEAD", "ref: refs/heads/main\n")
+				f.git.AddClone(clone, ports.CloneStatus{
+					Remote: remote, Branch: "main", Upstream: "origin/main", Head: "abc123", Clean: true,
+				})
+
+				catalog := fakes.NewCatalog()
+				catalog.Set("clone",
+					skill("owner/repo", "clone-skill", 500),
+					skill("different/repo", "clone-skill", 400),
+				)
+				res, err := f.withCatalog(catalog).SearchCatalog(t.Context(), "clone", 10, app.CatalogOptions{})
+				if err != nil {
+					t.Fatalf("SearchCatalog = %v", err)
+				}
+				if !res.Entries[0].Installed || res.Entries[0].InstalledSource != "owner/repo" || res.Entries[0].PossibleDuplicate {
+					t.Errorf("same-repo clone entry = %+v, want Installed=true, InstalledSource=owner/repo", res.Entries[0])
+				}
+				if res.Entries[1].Installed || !res.Entries[1].PossibleDuplicate || res.Entries[1].DuplicateOf != "clone-skill" || res.Entries[1].DuplicateSource != "owner/repo" {
+					t.Errorf("different-repo clone entry = %+v, want PossibleDuplicate=true, DuplicateOf=clone-skill, DuplicateSource=owner/repo", res.Entries[1])
+				}
+			})
+		}
+	})
+
+	t.Run("alias and gitlab remote do not falsely match github", func(t *testing.T) {
+		f := newFixture(t)
+		f.installLock(map[string]map[string]string{"alpha": v1})
+		if err := os.Symlink("alpha", f.home.Path(".agents/skills/alpha-alias")); err != nil {
+			t.Fatal(err)
+		}
+		clone := f.home.Path(".claude/skills/gl-skill")
+		f.home.WriteFile(".claude/skills/gl-skill/SKILL.md", "---\nname: gl-skill\ndescription: g\n---\n")
+		f.home.WriteFile(".claude/skills/gl-skill/.git/HEAD", "ref: refs/heads/main\n")
+		f.git.AddClone(clone, ports.CloneStatus{
+			Remote: "https://gitlab.com/owner/repo.git", Branch: "main", Upstream: "origin/main", Head: "def456", Clean: true,
+		})
+
+		catalog := fakes.NewCatalog()
+		catalog.Set("alias",
+			skill("other/repo", "alpha-alias", 300),
+			skill("owner/repo", "gl-skill", 200),
+		)
+		res, err := f.withCatalog(catalog).SearchCatalog(t.Context(), "alias", 10, app.CatalogOptions{})
+		if err != nil {
+			t.Fatalf("SearchCatalog = %v", err)
+		}
+		if res.Entries[0].Installed || !res.Entries[0].PossibleDuplicate || res.Entries[0].DuplicateOf != "alpha" || res.Entries[0].DuplicateSource != "acme/skills" {
+			t.Errorf("alias entry = %+v, want PossibleDuplicate of alpha from acme/skills", res.Entries[0])
+		}
+		if res.Entries[1].Installed || !res.Entries[1].PossibleDuplicate || res.Entries[1].DuplicateOf != "gl-skill" || res.Entries[1].DuplicateSource != "" {
+			t.Errorf("gitlab entry = %+v, want PossibleDuplicate of gl-skill with no recorded origin", res.Entries[1])
+		}
+	})
 }

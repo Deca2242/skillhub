@@ -9,6 +9,7 @@ skillhub   1 Skills (17)  2 Actualizar  3 Instalar  4 Salud (26)   h historial �
 │ • e eliminar
 │ 1 Skills: o desactivarla de verdad (OFF/) • p arreglar el enlace roto • x ignorar o dejar de
 │ ignorar (filtro ignoradas) • enter ver todo
+│ Fuera: skills de proveedor, plugins de Claude Code, gentle-ai y de proyecto.
 │ 2 Actualizar: enter ver cambios • a aplicar esta • o omitir esta versión • t aplicar todas
 │ Cambios: ↑/↓ desplazar • v cambiar vista (si la modificaste) • esc volver
 │ 3 Instalar: enter empezar o continuar • espacio marcar un agente • esc cancelar
@@ -16,6 +17,5 @@ skillhub   1 Skills (17)  2 Actualizar  3 Instalar  4 Salud (26)   h historial �
 │ Historial (h): u deshacer la operación elegida • esc volver
 │ Ajustes (c): ↑/↓ elegir • enter cambiar • esc volver
 │ Confirmación: s sí • n no • v ver u ocultar detalles • esc no
-│
 │ Pulsa ? o esc para cerrar la ayuda.
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

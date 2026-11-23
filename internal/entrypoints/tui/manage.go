@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"slices"
 	"strings"
 
 	"charm.land/bubbles/v2/table"
@@ -46,10 +45,12 @@ type manage struct {
 
 	findings       []app.Finding
 	findingsLoaded bool
-	// doctorFindings are the findings the Doctor list offers, in the order
-	// of its groups; findingsTable keeps the cursor over them.
-	doctorFindings []app.Finding
-	doctorTop      int
+	// health is the row of the Salud list the cursor is on, kept by its
+	// finding (healthSel); findingsTable moves it through the rows
+	// healthList gives (grouped by skill, INV10), and doctorTop is the
+	// first line the list shows.
+	health    healthSel
+	doctorTop int
 	// searching is set while Doctor's findings are looked for.
 	searching     bool
 	findingsTable table.Model
@@ -370,7 +371,7 @@ func (m *Model) handleManageSkillsKey(k string) (tea.Cmd, bool) {
 		return nil, true
 	}
 	if row.Ignored {
-		m.status = text.TUIIgnoredRow(row.RawName)
+		m.status = text.TUIIgnoredRow(text.SafeLine(row.RawName))
 		return nil, true
 	}
 	if m.actions == nil && m.actionsPending {
@@ -614,26 +615,62 @@ func (m *Model) handleFindings(msg findingsMsg) {
 		return
 	}
 	m.v2.findings = msg.findings
-	groups, _ := doctorGroups(msg.findings)
-	m.v2.doctorFindings = slices.Concat(groups...)
 	m.v2.findingsLoaded = true
 	m.refreshFindings()
 }
 
+// handleDoctorKey moves through the rows of the Salud list, and enter reads
+// the repairs of the finding under the cursor: the same finding, and so the
+// same plan, from any skill that lists it.
 func (m *Model) handleDoctorKey(k string, msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	// The rows may have changed since the last key: the skills of the broken
+	// links arrive after the findings. The cursor is still on its finding.
+	groups, rows, _ := m.healthList()
+	m.syncHealth(groups, rows)
 	switch k {
 	case "enter":
 		idx := m.v2.findingsTable.Cursor()
-		if m.busy || idx < 0 || idx >= len(m.v2.doctorFindings) {
+		if m.busy || idx < 0 || idx >= len(rows) {
+			return m, nil
+		}
+		if m.actions == nil && m.actionsPending {
+			// Until the load tells the skill of each broken link, the list
+			// still moves under the cursor.
+			m.status = text.TUIReadingActions
 			return m, nil
 		}
 		m.busy = true
 		m.status = text.TUIReadRepairs
-		return m, repairsCmd(m.app, m.v2.doctorFindings[idx], m.ask())
+		return m, repairsCmd(m.app, rows[idx].finding, m.ask())
+	case keyCompareSkills:
+		idx := m.v2.findingsTable.Cursor()
+		if m.busy || idx < 0 || idx >= len(rows) {
+			return m, nil
+		}
+		f := rows[idx].finding
+		if f.Kind != "homonyms" || len(f.Skills) < 2 {
+			return m, nil
+		}
+		return m.openCompareSkills(f.Skills[0], f.Skills[1], modeNormal)
 	}
 	var cmd tea.Cmd
 	m.v2.findingsTable, cmd = m.v2.findingsTable.Update(msg)
+	m.v2.health = healthAt(groups, rows, m.v2.findingsTable.Cursor())
 	return m, cmd
+}
+
+// syncHealth gives the cursor of the Salud list the rows healthList gives
+// now, and puts it on its finding wherever they list it, or in the list when
+// they no longer do.
+func (m *Model) syncHealth(groups []*healthGroup, rows []healthRow) {
+	trows := make([]table.Row, 0, len(rows))
+	for _, r := range rows {
+		trows = append(trows, table.Row{r.finding.ID})
+	}
+	m.v2.findingsTable.SetRows(trows)
+	i := m.v2.health.at(groups, rows)
+	m.v2.findingsTable.SetCursor(max(0, i))
+	m.v2.health = healthAt(groups, rows, i)
 }
 
 func (m *Model) handleRepairs(msg repairsMsg) {
@@ -692,18 +729,12 @@ func (m *Model) handleChooseKey(k string) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// refreshFindings gives the cursor of the Doctor list its rows.
+// refreshFindings gives the cursor of the Salud list its rows: one per row
+// it stops at, so a finding listed under two skills has two.
 func (m *Model) refreshFindings() {
 	m.v2.findingsTable.SetColumns([]table.Column{{Title: text.TUIColFinding, Width: max(10, m.width-4)}})
-	rows := make([]table.Row, 0, len(m.v2.doctorFindings))
-	for _, f := range m.v2.doctorFindings {
-		rows = append(rows, table.Row{f.ID})
-	}
-	m.v2.findingsTable.SetRows(rows)
-	// An empty table leaves its cursor at -1; keep it on a row.
-	if c := m.v2.findingsTable.Cursor(); c < 0 || c >= len(rows) {
-		m.v2.findingsTable.SetCursor(max(0, min(c, len(rows)-1)))
-	}
+	groups, rows, _ := m.healthList()
+	m.syncHealth(groups, rows)
 }
 
 func (m *Model) resizeManage() {
@@ -725,7 +756,7 @@ func PresentChoices(items []string, cursor int) string {
 		if i == cursor {
 			mark = "> "
 		}
-		fmt.Fprintf(&b, "%s%s\n", mark, it)
+		fmt.Fprintf(&b, "%s%s\n", mark, text.SafeLine(it))
 	}
 	return b.String()
 }

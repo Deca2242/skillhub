@@ -98,3 +98,26 @@ func TestCatalogStaleWarning(t *testing.T) {
 		t.Errorf("CatalogStale = %q", got)
 	}
 }
+
+func TestCatalogTableShowsOriginAndPossibleDuplicates(t *testing.T) {
+	entries := []app.CatalogEntry{
+		{ID: "acme/skills/alpha", Source: "acme/skills", SkillID: "alpha", Name: "alpha", Installs: 900,
+			Installable: true, InstallSource: "acme/skills@alpha", Installed: true, InstalledSource: "acme/skills"},
+		{ID: "other/repo/beta", Source: "other/repo", SkillID: "beta", Name: "beta", Installs: 800,
+			Installable: true, InstallSource: "other/repo@beta", PossibleDuplicate: true, DuplicateOf: "beta", DuplicateSource: "acme/skills"},
+		{ID: "other/repo/gamma", Source: "other/repo", SkillID: "gamma", Name: "gamma", Installs: 700,
+			Installable: true, InstallSource: "other/repo@gamma", PossibleDuplicate: true, DuplicateOf: "gamma"},
+		{ID: "vercel/skills/react-best", Source: "vercel/skills", SkillID: "react-best", Name: "react-best", Installs: 600,
+			Installable: true, InstallSource: "vercel/skills@react-best"},
+	}
+	got := text.CatalogTable(entries)
+	want := "" +
+		"NOMBRE      ORIGEN         INSTALACIONES  ESTADO\n" +
+		"alpha       acme/skills    900            instalada (acme/skills)\n" +
+		"beta        other/repo     800            posible duplicado (beta, de acme/skills)\n" +
+		"gamma       other/repo     700            posible duplicado (gamma, sin origen)\n" +
+		"react-best  vercel/skills  600            \n"
+	if got != want {
+		t.Errorf("CatalogTable =\n%s\nwant\n%s", got, want)
+	}
+}

@@ -14,6 +14,12 @@ import (
 // Only the keys that act are folded: the text typed in a filter or a
 // prompt reaches its input as it was typed.
 
+// keySkillDocument opens the read-only local SKILL.md document view.
+const keySkillDocument = "v"
+
+// keyCompareSkills opens the read-only homonym skill comparison view.
+const keyCompareSkills = "m"
+
 // keyOf is the key msg names, with a single capital letter folded to its
 // lower case.
 func keyOf(msg tea.KeyPressMsg) string {

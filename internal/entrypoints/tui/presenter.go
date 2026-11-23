@@ -48,6 +48,14 @@ type SkillRow struct {
 	// Ignored marks a skill the ignore setting hides: only the «ignoradas»
 	// filter shows it, and x stops ignoring it (UX4).
 	Ignored bool
+	// Description, Aliases, LockSource, and GitRemote are searched by
+	// matchesSkillQuery; MatchFields records which non-visible fields matched
+	// the active query so the panel can explain why the row appeared (INV2).
+	Description string
+	Aliases     []string
+	LockSource  string
+	GitRemote   string
+	MatchFields []string
 }
 
 // PresentSkills formats skills and filters them by query (case-insensitive).
@@ -55,22 +63,34 @@ func PresentSkills(skills []domain.Skill, query string) []SkillRow {
 	q := strings.ToLower(strings.TrimSpace(query))
 	out := make([]SkillRow, 0, len(skills))
 	for _, s := range skills {
-		name := s.Name
+		name := text.SafeLine(s.Name)
 		if len(s.Aliases) > 0 {
-			name = fmt.Sprintf("%s (%s)", s.Name, strings.Join(s.Aliases, ", "))
+			name = fmt.Sprintf("%s (%s)", name, joinSafeComma(s.Aliases))
 		}
 		row := SkillRow{
-			ID:        s.ID,
-			RawName:   s.Name,
-			Name:      name,
-			Origin:    text.OriginKind(s.Origin.Kind),
-			Harnesses: formatHarnesses(s.Locations),
-			State:     text.State(s.State),
-			Issues:    formatIssues(s.Issues),
+			ID:          s.ID,
+			RawName:     s.Name,
+			Name:        name,
+			Origin:      text.OriginKind(s.Origin.Kind),
+			Harnesses:   formatHarnesses(s.Locations),
+			State:       text.State(s.State),
+			Issues:      formatIssues(s.Issues),
+			Description: s.Description,
+			Aliases:     slices.Clone(s.Aliases),
+		}
+		if s.Origin.Lock != nil {
+			row.LockSource = s.Origin.Lock.Source
+		}
+		if s.Origin.GitClone != nil {
+			row.GitRemote = s.Origin.GitClone.Remote
 		}
 		row.Kind, row.Short = rowState(s)
-		if q != "" && !matchesSkillQuery(row, q) {
-			continue
+		if q != "" {
+			matched, hidden := skillQueryMatches(row, q)
+			if !matched {
+				continue
+			}
+			row.MatchFields = hidden
 		}
 		out = append(out, row)
 	}
@@ -94,9 +114,9 @@ func PresentParked(parked []app.ParkedSkill, query string) []SkillRow {
 		row := SkillRow{
 			ID:        parkedIDPrefix + p.Key,
 			RawName:   p.Key,
-			Name:      p.Key,
+			Name:      text.SafeLine(p.Key),
 			Origin:    text.TUIParkedOrigin,
-			Harnesses: orEmpty(strings.Join(p.Harnesses, ", ")),
+			Harnesses: orEmpty(joinSafeComma(p.Harnesses)),
 			State:     text.TUIParkedSince(FormatTime(p.Since)),
 			Issues:    issues,
 			ParkedKey: p.Key,
@@ -112,39 +132,111 @@ func PresentParked(parked []app.ParkedSkill, query string) []SkillRow {
 }
 
 func matchesSkillQuery(r SkillRow, q string) bool {
-	fields := []string{r.ID, r.Name, r.Origin, r.Harnesses, r.State, r.Issues}
-	for _, f := range fields {
-		if strings.Contains(strings.ToLower(f), q) {
-			return true
+	matched, _ := skillQueryMatches(r, q)
+	return matched
+}
+
+func containsFold(s, q string) bool {
+	return s != "" && strings.Contains(strings.ToLower(s), q)
+}
+
+func skillQueryMatches(r SkillRow, q string) (bool, []string) {
+	matched := false
+	for _, f := range []string{r.ID, r.RawName, r.Origin, r.Harnesses, r.State, r.Issues} {
+		if containsFold(f, q) {
+			matched = true
+			break
 		}
 	}
-	return false
+
+	var hidden []string
+	if containsFold(r.Description, q) {
+		hidden = append(hidden, text.SearchFieldDescription)
+	}
+	for _, alias := range r.Aliases {
+		if containsFold(alias, q) {
+			hidden = append(hidden, text.SearchFieldAlias)
+			break
+		}
+	}
+	if containsFold(r.LockSource, q) {
+		hidden = append(hidden, text.SearchFieldRepo)
+	}
+	if containsFold(r.GitRemote, q) {
+		hidden = append(hidden, text.SearchFieldRemote)
+	}
+
+	if len(hidden) > 0 {
+		matched = true
+	}
+	if !matched || containsFold(r.RawName, q) || containsFold(r.Short, q) {
+		return matched, nil
+	}
+	return true, hidden
 }
 
 // PresentSkillDetail formats a full detail view of a skill in Spanish.
 func PresentSkillDetail(s domain.Skill) string {
+	return PresentSkillDetailWithSightings(s, nil, nil)
+}
+
+// PresentSkillDetailWithSightings formats a full detail view of a skill in
+// Spanish, including how each agent sees it and through which path.
+func PresentSkillDetailWithSightings(s domain.Skill, sightings []app.Sighting, agentName func(string) string) string {
+	return PresentSkillDetailWithActivity(s, sightings, agentName, nil, time.Time{})
+}
+
+// PresentSkillDetailWithActivity formats a full detail view of a skill in
+// Spanish, including how each agent sees it and all of its skillhub activity.
+func PresentSkillDetailWithActivity(
+	s domain.Skill,
+	sightings []app.Sighting,
+	agentName func(string) string,
+	activity []app.ActivityEntry,
+	now time.Time,
+) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "Skill: %s\n", s.Name)
-	fmt.Fprintf(&b, "ID: %s\n", s.ID)
+	fmt.Fprintf(&b, "Skill: %s\n", text.SafeLine(s.Name))
+	fmt.Fprintf(&b, "ID: %s\n", text.SafeLine(s.ID))
 	if len(s.Aliases) > 0 {
-		fmt.Fprintf(&b, "Alias: %s\n", strings.Join(s.Aliases, ", "))
+		fmt.Fprintf(&b, "Alias: %s\n", joinSafeComma(s.Aliases))
 	}
 	if s.Description != "" {
-		fmt.Fprintf(&b, "Descripción: %s\n", s.Description)
+		fmt.Fprintf(&b, "Descripción: %s\n", text.SafeLine(s.Description))
+	}
+	fmt.Fprintf(&b, "%s\n", text.TUIPanelSkillhubState(skillhubState(s)))
+	fmt.Fprintf(&b, "%s\n", text.TUIPanelAvailable(detailAvailableIn(s)))
+	if len(sightings) > 0 {
+		fmt.Fprintf(&b, "%s\n", text.TUISkillDetailWhyHeader)
+		for _, sg := range sightings {
+			name := sg.Harness
+			if agentName != nil {
+				name = agentName(sg.Harness)
+			}
+			fmt.Fprintf(&b, "  - %s: %s (%s)\n", text.SafeLine(name), text.SafeLine(text.TUISightingReason(string(sg.Kind))), text.SafeLine(sg.Entry))
+		}
+	}
+	if len(activity) == 0 {
+		fmt.Fprintf(&b, "%s\n", text.TUIActivityNone)
+	} else {
+		fmt.Fprintf(&b, "%s\n", text.TUIActivityHeader)
+		for _, e := range activity {
+			fmt.Fprintf(&b, "%s\n", text.TUIActivityLine(e, now))
+		}
 	}
 	fmt.Fprintf(&b, "Origen: %s\n", text.OriginKind(s.Origin.Kind))
 	if s.Origin.Lock != nil {
-		fmt.Fprintf(&b, "  Repositorio: %s\n", s.Origin.Lock.Source)
-		fmt.Fprintf(&b, "  Ruta en repo: %s\n", s.Origin.Lock.SkillPath)
+		fmt.Fprintf(&b, "  Repositorio: %s\n", text.SafeLine(s.Origin.Lock.Source))
+		fmt.Fprintf(&b, "  Ruta en repo: %s\n", text.SafeLine(s.Origin.Lock.SkillPath))
 		fmt.Fprintf(&b, "  Hash del lock: %s\n", ShortSHA(s.Origin.Lock.FolderHash))
 		if s.Origin.Lock.Ref != "" {
-			fmt.Fprintf(&b, "  Ref: %s\n", s.Origin.Lock.Ref)
+			fmt.Fprintf(&b, "  Ref: %s\n", text.SafeLine(s.Origin.Lock.Ref))
 		}
 	}
 	if s.Origin.GitClone != nil {
-		fmt.Fprintf(&b, "  Remoto: %s\n", s.Origin.GitClone.Remote)
-		fmt.Fprintf(&b, "  Rama: %s\n", orEmpty(s.Origin.GitClone.Branch))
-		fmt.Fprintf(&b, "  Seguimiento: %s\n", orEmpty(s.Origin.GitClone.Upstream))
+		fmt.Fprintf(&b, "  Remoto: %s\n", text.SafeLine(s.Origin.GitClone.Remote))
+		fmt.Fprintf(&b, "  Rama: %s\n", orEmpty(text.SafeLine(s.Origin.GitClone.Branch)))
+		fmt.Fprintf(&b, "  Seguimiento: %s\n", orEmpty(text.SafeLine(s.Origin.GitClone.Upstream)))
 		fmt.Fprintf(&b, "  HEAD: %s\n", ShortSHA(s.Origin.GitClone.Head))
 	}
 	fmt.Fprintf(&b, "Estado: %s\n", text.State(s.State))
@@ -152,9 +244,29 @@ func PresentSkillDetail(s domain.Skill) string {
 	fmt.Fprintf(&b, "Ubicaciones (%d):\n", len(s.Locations))
 	for _, loc := range s.Locations {
 		fmt.Fprintf(&b, "  - [%s] %s (%s, sha %s)\n",
-			loc.AgentID, text.LocationKind(loc.Kind), loc.Path, ShortSHA(loc.ContentTreeSHA))
+			text.SafeLine(loc.AgentID), text.LocationKind(loc.Kind), text.SafeLine(loc.Path), ShortSHA(loc.ContentTreeSHA))
 	}
 	return b.String()
+}
+
+func skillhubState(s domain.Skill) string {
+	if s.State == domain.StateDisabled {
+		return text.TUIStateDisabledHand
+	}
+	return text.TUIStateActive
+}
+
+func detailAvailableIn(s domain.Skill) string {
+	var ids []string
+	for _, loc := range s.Locations {
+		if loc.AgentID != domain.StoreAgentID && !slices.Contains(ids, loc.AgentID) {
+			ids = append(ids, loc.AgentID)
+		}
+	}
+	if len(ids) == 0 {
+		return text.TUIPanelNowhere
+	}
+	return text.JoinNames(ids)
 }
 
 // UpdateRow is the presenter output for one row of the Actualizaciones table.
@@ -183,7 +295,7 @@ func PresentUpdates(cands []domain.UpdateCandidate) []UpdateRow {
 		}
 		out = append(out, UpdateRow{
 			CandidateID:     c.ID,
-			Target:          c.Target,
+			Target:          text.SafeLine(c.Target),
 			ToCommit:        ShortSHA(c.ToCommit),
 			ToSHA:           c.ToSHA,
 			State:           state,
@@ -252,7 +364,7 @@ func PresentApplyAllPlan(plan ApplyAllPlan) string {
 		b.WriteString("Se aplicarán:\n")
 		for _, r := range plan.Included {
 			fmt.Fprintf(&b, "  - %s (%s) — %d archivo(s) — etiquetas: %s\n",
-				r.Target, r.CandidateID, r.FileCount, r.Labels)
+				text.SafeLine(r.Target), text.SafeLine(r.CandidateID), r.FileCount, text.SafeLine(r.Labels))
 		}
 	}
 	if len(plan.Excluded) > 0 {
@@ -261,7 +373,7 @@ func PresentApplyAllPlan(plan ApplyAllPlan) string {
 		}
 		b.WriteString("Quedan fuera:\n")
 		for _, ex := range plan.Excluded {
-			fmt.Fprintf(&b, "  - %s: %s\n", ex.Target, ex.Reason)
+			fmt.Fprintf(&b, "  - %s: %s\n", text.SafeLine(ex.Target), text.SafeLine(ex.Reason))
 		}
 	}
 	b.WriteString("\n" + msgConfirmApplyAllPrompt)
@@ -272,7 +384,7 @@ func PresentApplyAllPlan(plan ApplyAllPlan) string {
 func PresentApplyAllResults(results []updates.ApplyResult) string {
 	parts := make([]string, 0, len(results))
 	for _, r := range results {
-		parts = append(parts, fmt.Sprintf("%s: %s", r.Target, outcomeName(r.Outcome)))
+		parts = append(parts, fmt.Sprintf("%s: %s", text.SafeLine(r.Target), text.SafeLine(outcomeName(r.Outcome))))
 	}
 	return strings.Join(parts, " | ")
 }
@@ -315,8 +427,8 @@ func (v DiffView) Toggle() DiffView {
 // its single installed → upstream diff.
 func PresentDiff(c domain.UpdateCandidate, r app.ReviewDiff, view DiffView) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "Destino: %s\n", c.Target)
-	fmt.Fprintf(&b, "Candidato: %s\n", c.ID)
+	fmt.Fprintf(&b, "Destino: %s\n", text.SafeLine(c.Target))
+	fmt.Fprintf(&b, "Candidato: %s\n", text.SafeLine(c.ID))
 	fmt.Fprintf(&b, "De %s a commit %s (árbol %s)\n", ShortSHA(c.FromSHA), ShortSHA(c.ToCommit), ShortSHA(c.ToSHA))
 	fmt.Fprintf(&b, "Etiquetas: %s\n", formatLabels(c.Labels))
 
@@ -342,11 +454,13 @@ func PresentDiff(c domain.UpdateCandidate, r app.ReviewDiff, view DiffView) stri
 	return b.String()
 }
 
-// writeFileDiffs writes the list of files and then each file's diff.
+// writeFileDiffs writes the list of files and then each file's diff. File
+// names and diff lines come from upstream or from the installed folder:
+// they print escaped (A28).
 func writeFileDiffs(b *strings.Builder, diffs []app.FileDiff) {
 	b.WriteString("\nArchivos:\n")
 	for _, d := range diffs {
-		fmt.Fprintf(b, "  %s  %s\n", text.FileChangeKind(d.Change), d.Path)
+		fmt.Fprintf(b, "  %s  %s\n", text.FileChangeKind(d.Change), text.SafeLine(d.Path))
 	}
 	if len(diffs) == 0 {
 		b.WriteString("  " + msgDiffEmpty + "\n")
@@ -354,15 +468,16 @@ func writeFileDiffs(b *strings.Builder, diffs []app.FileDiff) {
 	for _, d := range diffs {
 		b.WriteString("\n")
 		if d.Binary {
-			fmt.Fprintf(b, "%s: %s\n", d.Path, msgDiffBinary)
+			fmt.Fprintf(b, "%s: %s\n", text.SafeLine(d.Path), msgDiffBinary)
 			continue
 		}
 		if d.Unified == "" {
-			fmt.Fprintf(b, "%s: %s\n", d.Path, msgDiffEmpty)
+			fmt.Fprintf(b, "%s: %s\n", text.SafeLine(d.Path), msgDiffEmpty)
 			continue
 		}
-		b.WriteString(d.Unified)
-		if !strings.HasSuffix(d.Unified, "\n") {
+		unified := text.SafeDiff(d.Path, d.Unified)
+		b.WriteString(unified)
+		if !strings.HasSuffix(unified, "\n") {
 			b.WriteString("\n")
 		}
 	}
@@ -394,7 +509,7 @@ func PresentHistory(entries []domain.HistoryEntry) []HistoryRow {
 			Target:     e.Target,
 			Versions:   fmt.Sprintf("%s → %s", ShortSHA(e.FromSHA), ShortSHA(e.ToSHA)),
 			SnapshotID: orEmpty(e.SnapshotID),
-			Detail:     orEmpty(e.Detail),
+			Detail:     orEmpty(text.SafeLine(e.Detail)),
 			CanUndo:    e.Action == domain.ActionApplied && e.SnapshotID != "",
 			at:         e.At,
 			action:     e.Action,
@@ -424,7 +539,7 @@ func PresentSettings(s domain.Settings, bg ports.BackgroundStatus) SettingsView 
 	}
 	ignore := text.TUIIgnoredNone
 	if len(s.Ignore) > 0 {
-		ignore = strings.Join(s.Ignore, ", ")
+		ignore = joinSafeComma(s.Ignore)
 	}
 	return SettingsView{
 		CheckInterval:       FormatDuration(s.CheckInterval),
@@ -442,8 +557,8 @@ func PresentInterrupted(op domain.Operation) string {
 	var b strings.Builder
 	b.WriteString(msgInterruptedTitle + "\n\n")
 	fmt.Fprintf(&b, "Operación: %s\n", text.OperationKind(op.Kind))
-	fmt.Fprintf(&b, "Destino:   %s\n", op.Target)
-	fmt.Fprintf(&b, "Snapshot:  %s\n", orEmpty(op.RestoreSnapshotID))
+	fmt.Fprintf(&b, "Destino:   %s\n", text.SafeLine(op.Target))
+	fmt.Fprintf(&b, "Snapshot:  %s\n", orEmpty(text.SafeLine(op.RestoreSnapshotID)))
 	fmt.Fprintf(&b, "Iniciada:  %s\n\n", FormatTime(op.StartedAt))
 	b.WriteString(msgInterruptedNote + "\n\n")
 	b.WriteString(msgRecoverPrompt)
@@ -456,15 +571,15 @@ func PresentManagedPending() string {
 	return msgInterruptedTitle + "\n\n" + text.TUIManagedPending + "\n\n" + text.TUIManagedRecoverPrompt
 }
 
-// ShortSHA returns up to the first 10 characters of a SHA, or msgEmpty.
+// ShortSHA returns up to the first 10 characters of a SHA, escaped with SafeLine, or msgEmpty.
 func ShortSHA(sha string) string {
 	if sha == "" {
 		return msgEmpty
 	}
 	if len(sha) > 10 {
-		return sha[:10]
+		sha = sha[:10]
 	}
-	return sha
+	return text.SafeLine(sha)
 }
 
 // FormatTime formats a timestamp deterministically in UTC.
@@ -492,6 +607,14 @@ func formatHarnesses(locs []domain.Location) string {
 	}
 	if len(out) == 0 {
 		return msgEmpty
+	}
+	return joinSafeComma(out)
+}
+
+func joinSafeComma(items []string) string {
+	out := make([]string, len(items))
+	for i, it := range items {
+		out[i] = text.SafeLine(it)
 	}
 	return strings.Join(out, ", ")
 }
@@ -552,7 +675,7 @@ func ExplainError(err error) string {
 	var amb *app.AmbiguousError
 	switch {
 	case errors.As(err, &amb):
-		return fmt.Sprintf(msgErrAmbiguous, amb.Ref, strings.Join(amb.IDs, ", "))
+		return fmt.Sprintf(msgErrAmbiguous, text.SafeLine(amb.Ref), joinSafeComma(amb.IDs))
 	case errors.Is(err, ports.ErrStateLocked):
 		return msgErrStateLocked
 	case errors.Is(err, updates.ErrInterrupted):

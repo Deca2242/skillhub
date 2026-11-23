@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"skillhub/internal/app"
+	"skillhub/internal/entrypoints/text"
 	"skillhub/internal/entrypoints/tui"
 	"skillhub/internal/shared/domain"
 	"skillhub/internal/updates"
@@ -588,7 +589,7 @@ func TestScreensSayLoadingBeforeInitialLoad(t *testing.T) {
 		if !strings.Contains(view, "Cargando datos...") {
 			t.Errorf("screen %s before load lacks the loading notice:\n%s", screen, view)
 		}
-		for _, empty := range []string{"No se encontraron skills instaladas.", "No hay actualizaciones pendientes.", "No hay entradas en el historial."} {
+		for _, empty := range []string{"No se encontraron skills instaladas.", text.TUIUpdatesNeverChecked, "No hay entradas en el historial."} {
 			if strings.Contains(view, empty) {
 				t.Errorf("screen %s before load claims %q", screen, empty)
 			}

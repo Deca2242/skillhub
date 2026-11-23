@@ -1,0 +1,34 @@
+skillhub   1 Skills (17)  2 Actualizar  3 Instalar  4 Salud (26)
+╭──────────────────────────────────────────────────────────────────────────────╮
+│
+│  Comparar homónimas: orca-cli
+│
+│  a: dir:.claude-omni/skills/orca-cli
+│    Agentes que la ven: ningún agente
+│    Rutas:
+│      ~/.claude-omni/skills/orca-cli
+│
+│  b: lock:orca-cli
+│    Agentes que la ven: Claude Code, Codex, Cursor, Droid, Gemini CLI,
+│  GitHub Copilot, Kilo Code, OpenCode y Pi
+│    Rutas:
+│      ~/.agents/skills/orca-cli
+│      ~/.claude/skills/orca-cli
+│
+│  Archivos que difieren:
+│    modificado  SKILL.md
+│
+│  --- a/SKILL.md
+│  +++ b/SKILL.md
+│  @@ -1,6 +1,6 @@
+│   ---
+│   name: orca-cli
+│  -description: Omni copy
+│  +description: orca-cli
+│   ---
+│  +
+│   # orca-cli
+│  -from claude-omni
+│
+╰──────────────────────────────────────────────────────────────────────────────╯
+↑/↓ desplazar • PgUp/PgDn página • esc volver

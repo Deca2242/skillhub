@@ -5,17 +5,23 @@ skillhub   1 Skills (17)  2 Actualizar  3 Instalar  4 Salud (26)
 │  Muestra solo las skills que ese agente ve.
 │
 │  > Todos los agentes
-│    Antigravity
-│    Antigravity CLI
-│    Claude Code
-│    Codex
-│    Cursor
-│    Droid
-│    Gemini CLI
-│    GitHub Copilot
-│    Kilo Code
-│    OpenCode
-│    Pi
+│    Antigravity (1)
+│    Antigravity CLI (1)
+│    Claude Code (9)
+│    Codex (13)
+│    Cursor (8)
+│    Devin for Terminal (0 · sin skills)
+│    Droid (8)
+│    Gemini CLI (8)
+│    GitHub Copilot (8)
+│    Junie (0 · sin skills)
+│    Kilo Code (8)
+│    Kiro CLI (0 · sin skills)
+│    OpenCode (13)
+│    Pi (12)
+│    Qwen Code (0 · sin skills)
+│
+│  62 agentes conocidos: no detectados en este equipo.
 │
 ╰──────────────────────────────────────────────────────────────────────────────╯
-↑/↓ elegir • enter ver • esc volver
+↑/↓ elegir • enter ver • m comparar • esc volver

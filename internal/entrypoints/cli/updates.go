@@ -71,7 +71,7 @@ func (r *runner) listCmd() *cobra.Command {
 				if c.State == domain.CandidateBlocked {
 					state += ": " + text.BlockReason(c.BlockReason)
 				}
-				fmt.Fprintf(tw, fmtUpdateRow, c.Target, c.ID, shortSHA(c.ToCommit), state, labelNames(c.Labels))
+				fmt.Fprintf(tw, fmtUpdateRow, text.SafeLine(c.Target), c.ID, shortSHA(c.ToCommit), state, labelNames(c.Labels))
 			}
 			return tw.Flush()
 		},
@@ -104,7 +104,7 @@ func (r *runner) showCmd() *cobra.Command {
 			if asJSON {
 				return writeJSON(out, newShowJSON(c, review))
 			}
-			fmt.Fprintf(out, fmtShowHeader, c.Target, c.ID, shortSHA(c.FromSHA), shortSHA(c.ToCommit),
+			fmt.Fprintf(out, fmtShowHeader, text.SafeLine(c.Target), c.ID, shortSHA(c.FromSHA), shortSHA(c.ToCommit),
 				shortSHA(c.ToSHA), text.CandidateState(c.State), labelNames(c.Labels))
 			if c.State == domain.CandidateBlocked {
 				fmt.Fprintf(out, fmtShowBlocked, text.BlockReason(c.BlockReason))
@@ -130,12 +130,14 @@ func (r *runner) showCmd() *cobra.Command {
 	return cmd
 }
 
-// writeDiffs writes header, the list of files and each file's diff.
+// writeDiffs writes header, the list of files and each file's diff. File
+// names and diff lines come from upstream or from the installed folder:
+// they print escaped (A28).
 func writeDiffs(out io.Writer, header string, diffs []app.FileDiff) error {
 	fmt.Fprint(out, header)
 	tw := table(out)
 	for _, d := range diffs {
-		fmt.Fprintf(tw, fmtShowFile, text.FileChangeKind(d.Change), d.Path)
+		fmt.Fprintf(tw, fmtShowFile, text.FileChangeKind(d.Change), text.SafeLine(d.Path))
 	}
 	if err := tw.Flush(); err != nil {
 		return err
@@ -143,10 +145,10 @@ func writeDiffs(out io.Writer, header string, diffs []app.FileDiff) error {
 	for _, d := range diffs {
 		fmt.Fprintln(out)
 		if d.Binary {
-			fmt.Fprintf(out, "%s: %s", d.Path, msgShowBinary)
+			fmt.Fprintf(out, "%s: %s", text.SafeLine(d.Path), msgShowBinary)
 			continue
 		}
-		fmt.Fprint(out, d.Unified)
+		fmt.Fprint(out, text.SafeDiff(d.Path, d.Unified))
 	}
 	return nil
 }
@@ -221,7 +223,7 @@ func (r *runner) applyCmd() *cobra.Command {
 			fmt.Fprint(out, msgPlanHeader)
 			tw := table(out)
 			for _, c := range plan {
-				fmt.Fprintf(tw, fmtPlanRow, c.Target, c.ID, shortSHA(c.ToCommit), shortSHA(c.ToSHA), labelNames(c.Labels))
+				fmt.Fprintf(tw, fmtPlanRow, text.SafeLine(c.Target), c.ID, shortSHA(c.ToCommit), shortSHA(c.ToSHA), labelNames(c.Labels))
 			}
 			if err := tw.Flush(); err != nil {
 				return err
@@ -273,7 +275,7 @@ func (r *runner) applyPlan(out io.Writer, a *app.App, refs []string, all bool) (
 				return nil, err
 			}
 			if c.State == domain.CandidateBlocked {
-				return nil, fail(msgBlocked, c.Target, text.BlockReason(c.BlockReason))
+				return nil, fail(msgBlocked, text.SafeLine(c.Target), text.BlockReason(c.BlockReason))
 			}
 			if !containsCandidate(plan, c.ID) {
 				plan = append(plan, c)
@@ -289,9 +291,9 @@ func (r *runner) applyPlan(out io.Writer, a *app.App, refs []string, all bool) (
 	for _, c := range cands {
 		switch {
 		case c.State == domain.CandidateBlocked:
-			left = append(left, fmt.Sprintf(fmtExcludedBlock, c.Target, text.BlockReason(c.BlockReason)))
+			left = append(left, fmt.Sprintf(fmtExcludedBlock, text.SafeLine(c.Target), text.BlockReason(c.BlockReason)))
 		case isLocallyModified(c):
-			left = append(left, fmt.Sprintf(fmtExcludedLocal, c.Target))
+			left = append(left, fmt.Sprintf(fmtExcludedLocal, text.SafeLine(c.Target)))
 		default:
 			plan = append(plan, c)
 		}
@@ -330,17 +332,18 @@ func reportApply(out io.Writer, plan []domain.UpdateCandidate, results []updates
 		if target == "" && i < len(plan) {
 			target = plan[i].Target
 		}
+		target = text.SafeLine(target)
 		switch res.Outcome {
 		case updates.OutcomeApplied:
 			fmt.Fprintf(out, fmtApplied, target, res.SnapshotID)
 		case updates.OutcomeRejected:
 			failed = true
-			fmt.Fprintf(out, fmtRejected, target, explain(res.Err))
+			fmt.Fprintf(out, fmtRejected, target, text.Safe(explain(res.Err)))
 		case updates.OutcomeExcluded:
 			fmt.Fprintf(out, fmtExcluded, target)
 		default:
 			failed = true
-			fmt.Fprintf(out, fmtFailed, target, explain(res.Err))
+			fmt.Fprintf(out, fmtFailed, target, text.Safe(explain(res.Err)))
 		}
 	}
 	if failed {
@@ -369,14 +372,14 @@ func (r *runner) skipCmd() *cobra.Command {
 			}
 			out := cmd.OutOrStdout()
 			if dryRun {
-				fmt.Fprintf(out, fmtSkipPlan, shortSHA(c.ToCommit), c.Target)
+				fmt.Fprintf(out, fmtSkipPlan, shortSHA(c.ToCommit), text.SafeLine(c.Target))
 				fmt.Fprint(out, msgDryRun)
 				return nil
 			}
 			if err := a.Skip(r.ctx, updates.Approval{CandidateID: c.ID, ToSHA: c.ToSHA}); err != nil {
 				return err
 			}
-			fmt.Fprintf(out, fmtSkipped, shortSHA(c.ToCommit), c.Target)
+			fmt.Fprintf(out, fmtSkipped, shortSHA(c.ToCommit), text.SafeLine(c.Target))
 			return nil
 		},
 	}

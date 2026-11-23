@@ -29,12 +29,12 @@ func table(w io.Writer) *tabwriter.Writer { return tabwriter.NewWriter(w, 0, 0, 
 // shortSHA is the first seven characters of a SHA, as git shows it.
 func shortSHA(sha string) string {
 	if len(sha) > 7 {
-		return sha[:7]
+		sha = sha[:7]
 	}
 	if sha == "" {
 		return msgNone
 	}
-	return sha
+	return text.SafeLine(sha)
 }
 
 // formatTime shows a moment in the local time zone.
@@ -97,6 +97,8 @@ func harnesses(locs []domain.Location) string {
 		name := l.AgentID
 		if name == domain.StoreAgentID {
 			name = msgStore
+		} else {
+			name = text.SafeLine(name)
 		}
 		if !slices.Contains(out, name) {
 			out = append(out, name)

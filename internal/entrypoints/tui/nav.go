@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"slices"
 	"strings"
 
@@ -250,38 +251,121 @@ func (m *Model) nextFilter() {
 	m.skillsTable.SetCursor(0)
 }
 
-// filterAgents are the agents the filter offers: every agent that sees a
-// skill, by readable name. The first choice, "", is every agent.
-func (m *Model) filterAgents() []string {
-	var ids []string
+// agentDisplayName returns the human-readable name for a harness ID.
+func (m *Model) agentDisplayName(id string) string {
+	if m.app != nil {
+		return m.app.AgentName(id)
+	}
+	return id
+}
+
+// agentSkillCounts returns, by harness ID, how many rows in m.allRows each
+// agent sees.
+func (m *Model) agentSkillCounts() map[string]int {
+	counts := map[string]int{}
+	for _, r := range m.allRows {
+		var rowSeen []string
+		for _, id := range m.seenBy(r) {
+			if slices.Contains(rowSeen, id) {
+				continue
+			}
+			rowSeen = append(rowSeen, id)
+			counts[id]++
+		}
+	}
+	return counts
+}
+
+// filterAgentsData returns the selectable agent IDs ("" for all, followed by
+// detected agents sorted by display name) and the count of known agents that
+// were not detected on this machine.
+func (m *Model) filterAgentsData() (ids []string, undetected int) {
+	var seen []string
 	for _, r := range m.allRows {
 		for _, id := range m.seenBy(r) {
-			if !slices.Contains(ids, id) {
-				ids = append(ids, id)
+			if !slices.Contains(seen, id) {
+				seen = append(seen, id)
 			}
 		}
 	}
-	slices.SortFunc(ids, func(a, b string) int { return strings.Compare(m.app.AgentName(a), m.app.AgentName(b)) })
-	return append([]string{""}, ids...)
+	if m.app != nil {
+		if presence, err := m.app.DetectedAgents(context.Background()); err == nil {
+			for _, id := range presence.Detected {
+				if !slices.Contains(seen, id) {
+					seen = append(seen, id)
+				}
+			}
+			undetected = len(presence.Undetected)
+		}
+	}
+	slices.SortFunc(seen, func(a, b string) int {
+		return strings.Compare(m.agentDisplayName(a), m.agentDisplayName(b))
+	})
+	return append([]string{""}, seen...), undetected
+}
+
+// filterAgents are the agents the filter offers: every detected agent (and
+// any agent that sees a skill), by readable name. The first choice, "", is
+// every agent.
+func (m *Model) filterAgents() []string {
+	ids, _ := m.filterAgentsData()
+	return ids
+}
+
+func (m *Model) clampAgentCursor(n int) {
+	if n <= 0 {
+		m.agentCursor = 0
+		return
+	}
+	m.agentCursor = min(max(0, m.agentCursor), n-1)
 }
 
 // openAgentFilter shows the list of agents, with the cursor on the one
 // shown now.
 func (m *Model) openAgentFilter() {
+	m.compareFirst = ""
 	m.agentCursor = max(0, slices.Index(m.filterAgents(), m.agentFilter))
 	m.mode = modeAgentFilter
 }
 
 func (m *Model) handleAgentFilterKey(k string) (tea.Model, tea.Cmd) {
 	agents := m.filterAgents()
+	m.clampAgentCursor(len(agents))
 	switch k {
 	case "up", "k":
 		m.agentCursor = max(0, m.agentCursor-1)
 	case "down", "j":
 		m.agentCursor = min(len(agents)-1, m.agentCursor+1)
 	case "esc":
+		m.compareFirst = ""
 		m.mode = modeNormal
+	case "m":
+		if len(agents) == 0 {
+			return m, nil
+		}
+		chosen := agents[m.agentCursor]
+		if chosen == "" {
+			return m, nil
+		}
+		detectedCount := len(agents) - 1
+		if detectedCount <= 1 {
+			m.compareFirst = ""
+			m.openCompareAgents(chosen, chosen, true)
+			return m, nil
+		}
+		if m.compareFirst == "" {
+			m.compareFirst = chosen
+			return m, nil
+		}
+		first := m.compareFirst
+		m.compareFirst = ""
+		m.openCompareAgents(first, chosen, false)
 	case "enter":
+		if len(agents) == 0 {
+			m.mode = modeNormal
+			return m, nil
+		}
+		m.compareFirst = ""
 		m.agentFilter = agents[m.agentCursor]
 		m.mode = modeNormal
 		m.refreshTables()
@@ -291,15 +375,29 @@ func (m *Model) handleAgentFilterKey(k string) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) renderAgentFilter(boxW int) string {
-	var items []string
-	for _, id := range m.filterAgents() {
+	agents, undetected := m.filterAgentsData()
+	cursor := m.agentCursor
+	if len(agents) == 0 {
+		cursor = 0
+	} else {
+		cursor = min(max(0, cursor), len(agents)-1)
+	}
+	counts := m.agentSkillCounts()
+	items := make([]string, 0, len(agents))
+	for _, id := range agents {
 		if id == "" {
 			items = append(items, text.TUIAgentFilterAll)
 			continue
 		}
-		items = append(items, m.app.AgentName(id))
+		items = append(items, text.TUIAgentFilterItem(m.agentDisplayName(id), counts[id]))
 	}
-	body := m.styles.title.Render(text.TUIAgentFilterQuestion) + "\n" + text.TUIAgentFilterHint + "\n\n" +
-		strings.TrimRight(PresentChoices(items, m.agentCursor), "\n")
+	body := m.styles.title.Render(text.TUIAgentFilterQuestion) + "\n" + text.TUIAgentFilterHint
+	if m.compareFirst != "" {
+		body += "\n" + m.styles.selected.Render(text.TUICompareFirstMarked(m.agentDisplayName(m.compareFirst)))
+	}
+	body += "\n\n" + strings.TrimRight(PresentChoices(items, cursor), "\n")
+	if note := text.TUIAgentFilterUndetected(undetected); note != "" {
+		body += "\n\n" + m.styles.muted.Render(note)
+	}
 	return m.styles.box.Width(boxW).Render(body)
 }

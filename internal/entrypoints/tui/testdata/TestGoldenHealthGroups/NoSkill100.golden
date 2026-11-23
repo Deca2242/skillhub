@@ -1,0 +1,30 @@
+skillhub   1 Skills (18)  2 Actualizar  3 Instalar  4 Salud (27)   h historial • c ajustes
+12 skills de gentle-ai: las gestiona gentle-ai, skillhub no las toca.
+Buscar no cambia nada: solo se repara lo que elijas y confirmes.
+╭──────────────────────────────────────╮╭──────────────────────────────────────────────────────────╮
+│ 21 skills afectadas · 37 hallazgos   ││ Enlaces rotos (1)
+│ ▾ Enlaces rotos sin ski…  1 hallazgo ││ 1 enlace roto: apunta a una skill que ya no existe.
+│ · ghost                              ││ Arreglo sugerido: borrar el enlace.
+│ ▸ accessibility          8 hallazgos ││
+│ ▸ domain-driven-design   7 hallazgos ││ ghost
+│ ▸ git-guardrails-claude… 5 hallazgos ││ Dónde:
+│ ▸ web-quality-audit      7 hallazgos ││   ~/.claude/skills/ghost
+│ ▸ brainstorming           1 hallazgo ││ Hallazgo: broken_link:.claude/skills/ghost
+│ ▸ humanizer               1 hallazgo ││
+│ ▸ requirements-elicitat…  1 hallazgo ││ [enter] Ver cómo repararlo
+│ ▸ computer-use           2 hallazgos ││
+│ ▸ find-skills             1 hallazgo ││
+│ ▸ grill-with-docs         1 hallazgo ││
+│ ▸ orca-cli                1 hallazgo ││
+│ ▸ orchestration           1 hallazgo ││
+│ ▸ accessibility (~/.cla…  1 hallazgo ││
+│ ▸ domain-driven-design …  1 hallazgo ││
+│ ▸ find-skills (~/.claud…  1 hallazgo ││
+│ ▸ git-guardrails-claude…  1 hallazgo ││
+│ ▸ grill-with-docs (~/.c…  1 hallazgo ││
+│ ▸ orca-cli (~/.claude-o…  1 hallazgo ││
+│ ▸ orca-computer-use       1 hallazgo ││
+│ ▸ orchestration (~/.cla…  1 hallazgo ││
+│ ▸ web-quality-audit (~/…  1 hallazgo ││
+╰──────────────────────────────────────╯╰──────────────────────────────────────────────────────────╯
+enter ver cómo repararlo • r revisar ahora • ? ayuda • q salir

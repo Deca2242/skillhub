@@ -1,0 +1,24 @@
+skillhub   1 Skills (2)  2 Actualizar  3 Instalar  4 Salud   h historial • c ajustes
+╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│
+│  Skill: alpha
+│  ID: lock:alpha
+│  En skillhub: activa
+│  Disponible en: ningún agente
+│  Actividad en skillhub:
+│    • Falló la actualización — hace 5 minutos
+│    • Actualización deshecha — hace 15 minutos
+│    • Actualización aplicada — hace 25 minutos
+│  Origen: lock de skills
+│    Repositorio: acme/skills
+│    Ruta en repo: skills/alpha/SKILL.md
+│    Hash del lock: 319126fe9f
+│  Estado: sin revisar
+│  Problemas: ninguno
+│  Ubicaciones (1):
+│    - [store] carpeta (~/.agents/skills/alpha, sha
+│  319126fe9f)
+│
+│
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+v ver SKILL.md • enter/esc volver

@@ -1,0 +1,30 @@
+skillhub   1 Skills (18)  2 Actualizar  3 Instalar  4 Salud (27)
+12 skills de gentle-ai: las gestiona gentle-ai, skillhub no las toca.
+Buscar no cambia nada: solo se repara lo que elijas y confirmes.
+╭──────────────────────────────────────────────────────────────────────────────╮
+│ 21 skills afectadas · 37 hallazgos
+│ ▾ Enlaces rotos sin skill                                         1 hallazgo
+│ · ghost
+│ ▸ accessibility                                                  8 hallazgos
+│ ▸ domain-driven-design                                           7 hallazgos
+│ ▸ git-guardrails-claude-code                                     5 hallazgos
+│ ▸ web-quality-audit                                              7 hallazgos
+│ ▸ brainstorming                                                   1 hallazgo
+│ ▸ humanizer                                                       1 hallazgo
+│ ▸ requirements-elicitation                                        1 hallazgo
+│ ▸ computer-use                                                   2 hallazgos
+│ ▸ find-skills                                                     1 hallazgo
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭──────────────────────────────────────────────────────────────────────────────╮
+│ Enlaces rotos (1)
+│ 1 enlace roto: apunta a una skill que ya no existe. Arreglo sugerido: borrar
+│ el enlace.
+│
+│ ghost
+│ Dónde:
+│   ~/.claude/skills/ghost
+│ Hallazgo: broken_link:.claude/skills/ghost
+│
+│ [enter] Ver cómo repararlo
+╰──────────────────────────────────────────────────────────────────────────────╯
+enter ver cómo repararlo • r revisar ahora • ? ayuda • q salir

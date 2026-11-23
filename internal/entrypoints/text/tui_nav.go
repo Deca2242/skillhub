@@ -104,7 +104,7 @@ const (
 	TUIAgentFilterQuestion = "¿Qué agente quieres ver?"
 	TUIAgentFilterAll      = "Todos los agentes"
 	TUIAgentFilterHint     = "Muestra solo las skills que ese agente ve."
-	TUIKeysAgentFilter     = "↑/↓ elegir • enter ver • esc volver"
+	TUIKeysAgentFilter     = "↑/↓ elegir • enter ver • m comparar • esc volver"
 
 	TUIKeysChecks = "↑/↓ elegir • espacio marcar • enter confirmar • esc cancelar"
 	// TUIChecksFixed marks an agent the app cannot change now.
@@ -127,8 +127,31 @@ const (
 	TUIKeyByAgent   = "g ver por agente"
 )
 
+// TUIAgentFilterItem formats a detected agent choice with its skill count,
+// distinguishing zero skills explicitly.
+func TUIAgentFilterItem(name string, count int) string {
+	if count == 0 {
+		return fmt.Sprintf("%s (0 · sin skills)", name)
+	}
+	return fmt.Sprintf("%s (%d)", name, count)
+}
+
+// TUIAgentFilterUndetected summarizes how many known agents were not
+// detected on this machine, without listing all of them one by one.
+func TUIAgentFilterUndetected(n int) string {
+	if n <= 0 {
+		return ""
+	}
+	if n == 1 {
+		return "1 agente conocido: no detectado en este equipo."
+	}
+	return fmt.Sprintf("%d agentes conocidos: no detectados en este equipo.", n)
+}
+
 // TUIChecksQuestion heads the check boxes of the skill key.
-func TUIChecksQuestion(key string) string { return fmt.Sprintf("¿En qué agentes está %s?", key) }
+func TUIChecksQuestion(key string) string {
+	return fmt.Sprintf("¿En qué agentes está %s?", SafeLine(key))
+}
 
 // TUIChecksInstall heads the check boxes of an install, its step 3.
 const TUIChecksInstall = "Marca los agentes donde quedará disponible. Se proponen los detectados en tu equipo: es una propuesta, nunca un permiso."
@@ -327,7 +350,7 @@ func TUIUnignored(skills, entries []string) string {
 	switch len(skills) {
 	case 0:
 	case 1:
-		parts = append(parts, fmt.Sprintf("Ya no se ignora %s: vuelve a aparecer en Skills.", skills[0]))
+		parts = append(parts, fmt.Sprintf("Ya no se ignora %s: vuelve a aparecer en Skills.", SafeLine(skills[0])))
 	default:
 		parts = append(parts, fmt.Sprintf("Ya no se ignoran %s: vuelven a aparecer en Skills.", JoinNames(skills)))
 	}

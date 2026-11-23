@@ -367,42 +367,12 @@ func findingIndex(t *testing.T, a *app.App, id string) int {
 	return -1
 }
 
-// doctorOrder are the findings as the Doctor list offers them: grouped by
-// kind in text.TUIFindingOrder, then by kind, each group in Doctor's order,
-// and gentle-ai's copies left out (UX2).
+// doctorOrder are the findings in the order the cursor walks the Salud list,
+// grouped by skill (INV10). healthRowOrder, in health_groups_test.go, builds
+// that order from Doctor's findings without reading it from the TUI.
 func doctorOrder(t *testing.T, a *app.App) []app.Finding {
 	t.Helper()
-	findings, err := a.Doctor(t.Context())
-	if err != nil {
-		t.Fatal(err)
-	}
-	var kinds []string
-	for _, f := range findings {
-		if f.Kind != text.TUIGentleKind && !slices.Contains(kinds, f.Kind) {
-			kinds = append(kinds, f.Kind)
-		}
-	}
-	rank := func(k string) int {
-		if i := slices.Index(text.TUIFindingOrder, k); i >= 0 {
-			return i
-		}
-		return len(text.TUIFindingOrder)
-	}
-	slices.SortStableFunc(kinds, func(x, y string) int {
-		if d := rank(x) - rank(y); d != 0 {
-			return d
-		}
-		return strings.Compare(x, y)
-	})
-	var out []app.Finding
-	for _, k := range kinds {
-		for _, f := range findings {
-			if f.Kind == k {
-				out = append(out, f)
-			}
-		}
-	}
-	return out
+	return healthRowOrder(t, a)
 }
 
 // The Doctor screen lists the findings; choosing one shows its repairs,

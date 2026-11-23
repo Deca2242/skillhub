@@ -17,6 +17,8 @@ import (
 	"io/fs"
 	"path/filepath"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"skillhub/internal/shared/treehash"
 )
@@ -126,6 +128,11 @@ func CheckNodes(nodes []treehash.Node) error {
 	var count int
 	var size int64
 	for _, n := range nodes {
+		// The path is checked first: no error below prints a name that
+		// would act on the terminal.
+		if !validTreePath(n.Path) {
+			return fmt.Errorf("%q: %w", n.Path, ErrUnsupportedEntry)
+		}
 		switch n.Mode {
 		case treehash.ModeTree:
 		case treehash.ModeFile, treehash.ModeExecutable:
@@ -133,9 +140,6 @@ func CheckNodes(nodes []treehash.Node) error {
 			size += n.Size
 		default: // a symlink or a submodule
 			return fmt.Errorf("%s: %w", n.Path, ErrUnsupportedEntry)
-		}
-		if !validTreePath(n.Path) {
-			return fmt.Errorf("%q: %w", n.Path, ErrUnsupportedEntry)
 		}
 		if strings.Count(n.Path, "/")+1 > MaxDepth {
 			return fmt.Errorf("%s is too deep: %w", n.Path, ErrLimitsExceeded)
@@ -148,10 +152,12 @@ func CheckNodes(nodes []treehash.Node) error {
 }
 
 // validTreePath accepts a relative slash path whose every element is a
-// plain name: no "", ".", "..", ".git", backslash or NUL. Staging writes only
-// regular files below its fresh root, so such a path cannot leave it.
+// plain name: no "", ".", "..", ".git" or backslash. Staging writes only
+// regular files below its fresh root, so such a path cannot leave it. The
+// path must also print as it is (printablePath): a review shows every name
+// staging writes.
 func validTreePath(p string) bool {
-	if p == "" || strings.ContainsAny(p, "\\\x00") {
+	if p == "" || strings.Contains(p, "\\") || !printablePath(p) {
 		return false
 	}
 	for elem := range strings.SplitSeq(p, "/") {
@@ -160,6 +166,22 @@ func validTreePath(p string) bool {
 		}
 	}
 	return filepath.IsLocal(filepath.FromSlash(p))
+}
+
+// printablePath reports a path a terminal shows as it is (A28): valid UTF-8
+// without any control character (NUL, \r, ESC, \n and \t included) or bidi
+// control. It is the rule entrypoints/text.SafeLine escapes by, which the
+// core cannot import.
+func printablePath(p string) bool {
+	if !utf8.ValidString(p) {
+		return false
+	}
+	for _, r := range p {
+		if unicode.IsControl(r) || unicode.Is(unicode.Bidi_Control, r) {
+			return false
+		}
+	}
+	return true
 }
 
 // fill writes every blob of req.Nodes below req.Dir: from req.Reuse when a

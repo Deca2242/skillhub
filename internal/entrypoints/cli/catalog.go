@@ -59,7 +59,7 @@ func (r *runner) searchCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return r.printCatalog(cmd, cf, res, fmt.Sprintf(text.CatalogNoResults, strings.TrimSpace(query)))
+			return r.printCatalog(cmd, cf, res, fmt.Sprintf(text.CatalogNoResults, text.SafeLine(strings.TrimSpace(query))))
 		},
 	}
 	cf.add(c, app.DefaultCatalogLimit)
@@ -100,7 +100,7 @@ func (r *runner) printCatalog(cmd *cobra.Command, cf catalogFlags, res app.Catal
 		fmt.Fprint(errOut, text.CatalogStale(res.Stale, res.CachedAt))
 	}
 	if res.CacheErr != nil {
-		fmt.Fprintf(errOut, text.CatalogCacheNotSaved, res.CacheErr)
+		fmt.Fprintf(errOut, text.CatalogCacheNotSaved, text.SafeLine(res.CacheErr.Error()))
 	}
 	out := cmd.OutOrStdout()
 	if cf.asJSON {

@@ -11,13 +11,13 @@ import "skillhub/internal/shared/domain"
 // The CLI prints it as is and the TUI as a sentence.
 const V2OperationPending = "hay una operación de gestión de skills sin terminar; ejecuta «skillhub recover»"
 
-// lookup returns the name of v, or its code when v is unknown, so a value
-// added later is still shown rather than hidden.
+// lookup returns the name of v, or its code escaped with SafeLine when v is
+// unknown, so a value added later is still shown without acting on the terminal.
 func lookup[T ~string](table map[T]string, v T) string {
 	if name, ok := table[v]; ok {
 		return name
 	}
-	return string(v)
+	return SafeLine(string(v))
 }
 
 var states = map[domain.State]string{

@@ -121,6 +121,23 @@ type checkRun struct {
 	created []string
 }
 
+// LockEntryCheckable reports whether a lock entry's source can be checked for
+// updates: it must be a valid owner/name GitHub repository. The second return
+// value is true when the entry comes from a website's well-known index.
+func LockEntryCheckable(e domain.LockEntry) (checkable bool, webSource bool) {
+	if e.SourceType != "github" || !validRepo(e.Source) {
+		return false, e.SourceType == sourceTypeWellKnown
+	}
+	return true, false
+}
+
+// CloneCheckable reports whether a git clone's origin remote points at a
+// GitHub repository that skillhub can check.
+func CloneCheckable(remote string) bool {
+	_, ok := githubRepo(remote)
+	return ok
+}
+
 // Check detects upstream changes of the lock skills and the git clones,
 // stages and labels new candidates, and records the check moments. It never
 // changes a skills folder, a clone or the lock, and never recovers an
@@ -160,8 +177,8 @@ func (s *Service) Check(ctx context.Context) (CheckReport, error) {
 			run.results[tgt] = TargetCheck{Target: tgt, Outcome: CheckNotChecked, Err: ErrInterrupted}
 			continue
 		}
-		if e.SourceType != "github" || !validRepo(e.Source) {
-			run.results[tgt] = TargetCheck{Target: tgt, Outcome: CheckNotChecked, WebSource: e.SourceType == sourceTypeWellKnown}
+		if ok, web := LockEntryCheckable(e); !ok {
+			run.results[tgt] = TargetCheck{Target: tgt, Outcome: CheckNotChecked, WebSource: web}
 			continue
 		}
 		folder, err := s.storeFolder(e.Name)

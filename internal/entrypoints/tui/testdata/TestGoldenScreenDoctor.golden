@@ -2,39 +2,39 @@ skillhub   1 Skills (17)  2 Actualizar  3 Instalar  4 Salud (26)   h historial �
 12 skills de gentle-ai: las gestiona gentle-ai, skillhub no las toca.
 Buscar no cambia nada: solo se repara lo que elijas y confirmes.
 ╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ Hallazgos (36)                                                                                                                                               ││ Enlaces rotos (19)
-│ Enlaces rotos (19)                                                                                                                                           ││ 19 enlaces rotos: agentes que apuntan a una skill que ya no existe. Arreglo sugerido: borrar el enlace.
-│ · domain-driven-design                                                                                                                                       ││
-│ · web-quality-audit                                                                                                                                          ││ domain-driven-design
-│ · accessibility                                                                                                                                              ││ Dónde:
-│ · domain-driven-design                                                                                                                                       ││   ~/.config/devin/skills/domain-driven-design
-│ · accessibility                                                                                                                                              ││ Hallazgo: broken_link:.config/devin/skills/domain-driven-design
-│ · domain-driven-design                                                                                                                                       ││
-│ · git-guardrails-claude-code                                                                                                                                 ││ [enter] Ver cómo repararlo
-│ · accessibility                                                                                                                                              ││
-│ · domain-driven-design                                                                                                                                       ││
-│ · git-guardrails-claude-code                                                                                                                                 ││
-│ · web-quality-audit                                                                                                                                          ││
-│ · accessibility                                                                                                                                              ││
-│ · domain-driven-design                                                                                                                                       ││
-│ · git-guardrails-claude-code                                                                                                                                 ││
-│ · web-quality-audit                                                                                                                                          ││
-│ · accessibility                                                                                                                                              ││
-│ · web-quality-audit                                                                                                                                          ││
-│ · accessibility                                                                                                                                              ││
-│ · web-quality-audit                                                                                                                                          ││
-│ Apagadas pero visibles (4)                                                                                                                                   ││
-│ · lock:accessibility                                                                                                                    Codex, OpenCode y Pi ││
-│ · lock:domain-driven-design                                                                                                             Codex, OpenCode y Pi ││
-│ · lock:git-guardrails-claude-code                                                                                                       Codex, OpenCode y Pi ││
-│ · lock:web-quality-audit                                                                                                                Codex, OpenCode y Pi ││
-│ Skills sin gestionar (2)                                                                                                                                     ││
-│ · dir:.claude/skills/humanizer                                                                                                                               ││
-│ · dir:.codex/skills/brainstorming                                                                                                                            ││
-│ Copias sin original (1)                                                                                                                                      ││
-│ · dir:.copilot/skills/requirements-elicitation                                                                                                               ││
-│ Nombres repetidos (9)                                                                                                                                        ││
-│ · accessibility                                                                                                                                              ││
-│ · domain-driven-design                                                                                                                                       ││
+│ 21 skills afectadas · 36 hallazgos                                                                                                                           ││ accessibility
+│ ▾ accessibility                                                                                                                                  8 hallazgos ││
+│ · enlace roto                                                                                                                                          Droid ││ 1 enlace roto: apunta a una skill que ya no existe. Arreglo sugerido: borrar el enlace.
+│ · enlace roto                                                                                                                                          Junie ││ Agentes: Droid
+│ · enlace roto                                                                                                                                      Kilo Code ││ Dónde:
+│ · enlace roto                                                                                                                                       Kiro CLI ││   ~/.factory/skills/accessibility
+│ · enlace roto                                                                                                                                             Pi ││ Hallazgo: broken_link:.factory/skills/accessibility
+│ · enlace roto                                                                                                                                      Qwen Code ││
+│ · apagada pero visible                                                                                                                  Codex, OpenCode y Pi ││ [enter] Ver cómo repararlo
+│ · nombre repetido                                                                                                                                            ││
+│ ▸ domain-driven-design                                                                                                                           7 hallazgos ││
+│ ▸ git-guardrails-claude-code                                                                                                                     5 hallazgos ││
+│ ▸ web-quality-audit                                                                                                                              7 hallazgos ││
+│ ▸ brainstorming                                                                                                                                   1 hallazgo ││
+│ ▸ humanizer                                                                                                                                       1 hallazgo ││
+│ ▸ requirements-elicitation                                                                                                                        1 hallazgo ││
+│ ▸ computer-use                                                                                                                                   2 hallazgos ││
+│ ▸ find-skills                                                                                                                                     1 hallazgo ││
+│ ▸ grill-with-docs                                                                                                                                 1 hallazgo ││
+│ ▸ orca-cli                                                                                                                                        1 hallazgo ││
+│ ▸ orchestration                                                                                                                                   1 hallazgo ││
+│ ▸ accessibility (~/.claude-omni/skills)                                                                                                           1 hallazgo ││
+│ ▸ domain-driven-design (~/.claude-omni/skills)                                                                                                    1 hallazgo ││
+│ ▸ find-skills (~/.claude-omni/skills)                                                                                                             1 hallazgo ││
+│ ▸ git-guardrails-claude-code (~/.claude-omni/skills)                                                                                              1 hallazgo ││
+│ ▸ grill-with-docs (~/.claude-omni/skills)                                                                                                         1 hallazgo ││
+│ ▸ orca-cli (~/.claude-omni/skills)                                                                                                                1 hallazgo ││
+│ ▸ orca-computer-use                                                                                                                               1 hallazgo ││
+│ ▸ orchestration (~/.claude-omni/skills)                                                                                                           1 hallazgo ││
+│ ▸ web-quality-audit (~/.claude-omni/skills)                                                                                                       1 hallazgo ││
+│                                                                                                                                                              ││
+│                                                                                                                                                              ││
+│                                                                                                                                                              ││
+│                                                                                                                                                              ││
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 enter ver cómo repararlo • r revisar ahora • ? ayuda • q salir

@@ -80,13 +80,13 @@ const (
 
 // TUIPlanID is the identifier the confirmation approves.
 func TUIPlanID(id string) string {
-	return fmt.Sprintf("Identificador del plan: %s\n", id)
+	return fmt.Sprintf("Identificador del plan: %s\n", SafeLine(id))
 }
 
 // TUIParkedSince is the state of a disabled skill's row on the Skills
 // screen: since when skillhub keeps it parked.
 func TUIParkedSince(when string) string {
-	return fmt.Sprintf("desactivada desde %s", when)
+	return fmt.Sprintf("desactivada desde %s", SafeLine(when))
 }
 
 // TUIRefusal explains a refusal of a version 2 operation as Refusal does,
@@ -100,7 +100,7 @@ func TUIRefusal(err error, req app.Request) (msg string, ok bool) {
 	}
 	for _, r := range tuiRefusalTexts {
 		if errors.Is(re.Kind, r.kind) {
-			return r.text(req, re.Related), true
+			return SafeLine(r.text(req, re.Related)), true
 		}
 	}
 	return Refusal(err, req)
@@ -142,4 +142,110 @@ var tuiRefusalTexts = []refusalText{
 	{app.ErrNoEntryToReinstall, func(req app.Request, _ []string) string {
 		return fmt.Sprintf("no hay ningún registro de «%s» que reinstalar; para una skill nueva, usa Instalar (3)", installKey(req))
 	}},
+}
+
+// The Salud list grouped by skill (INV10, S15 #9): each affected skill is
+// one line, open with its findings under it while the cursor is in it; the
+// findings that name no skill keep a group of their kind.
+const (
+	// TUIHealthOpen marks the group the cursor is in, shown with its
+	// findings; TUIHealthClosed marks the others.
+	TUIHealthOpen   = "▾"
+	TUIHealthClosed = "▸"
+)
+
+// TUIHealthTitle heads the Salud list: the skills affected, then the
+// findings, each counted once. Without a skill, only the findings.
+func TUIHealthTitle(skills, findings int) string {
+	if skills == 0 {
+		return TUIDoctorTitle(findings)
+	}
+	affected := fmt.Sprintf("%d skills afectadas", skills)
+	if skills == 1 {
+		affected = "1 skill afectada"
+	}
+	return affected + " · " + TUIHealthCount(findings)
+}
+
+// TUIHealthCount counts the findings of a group, on its line.
+func TUIHealthCount(n int) string {
+	if n == 1 {
+		return "1 hallazgo"
+	}
+	return fmt.Sprintf("%d hallazgos", n)
+}
+
+// healthRows are the words of a finding on its row, under the skill it
+// affects: short, since the skill is named on the line above.
+var healthRows = map[string]string{
+	"broken_link":               "enlace roto",
+	"link_cycle":                "enlace en ciclo",
+	"link_outside_roots":        "enlace a otra carpeta",
+	"identical_copies":          "copias idénticas",
+	"no_canonical":              "copias sin original",
+	"unmanaged_skill":           "sin gestionar",
+	"lock_entry_without_folder": "registro sin carpeta",
+	"lock_name_mismatch":        "nombre distinto",
+	"parked_but_visible":        "apagada pero visible",
+	"homonyms":                  "nombre repetido",
+}
+
+// TUIHealthRow names a finding of kind on its row under its skill.
+func TUIHealthRow(kind string) string {
+	if s, ok := healthRows[kind]; ok {
+		return s
+	}
+	return FindingKind(kind)
+}
+
+// healthOne tells one finding of each kind in the singular, as findingGroups
+// tells a group of them: what the problem is and the suggested fix.
+var healthOne = map[string]struct{ what, fix string }{
+	"broken_link":               {"apunta a una skill que ya no existe", "borrar el enlace"},
+	"link_cycle":                {"forma un ciclo y no lleva a ninguna skill", "ninguno, skillhub solo lo informa"},
+	"link_outside_roots":        {"lleva fuera de las carpetas de skills conocidas", "ninguno, skillhub no lo sigue"},
+	"identical_copies":          {"la misma skill está en varios lugares, con el mismo contenido", "dejar una sola copia y enlazar las demás"},
+	"no_canonical":              {"está copiada en varios agentes, pero no en el almacén de skillhub", "elegir la copia que se queda y enlazar las demás"},
+	"unmanaged_skill":           {"está copiada a mano, fuera del almacén de skillhub", "pasarla a la gestión de skillhub"},
+	"lock_entry_without_folder": {"npx skills recuerda una skill cuya carpeta ya no está", "reinstalarla o desactivar su registro"},
+	"lock_name_mismatch":        {"el nombre que guarda npx skills no coincide con el de la skill", "ninguno, skillhub solo lo informa"},
+	"parked_but_visible":        {"está en OFF/, pero algún agente todavía la ve", "desactivarla con skillhub"},
+	"homonyms":                  {"hay otra skill distinta que se llama igual", "ninguno, skillhub nunca las une por su nombre"},
+}
+
+// TUIHealthFindings is the plain line of n findings of kind: how many, what
+// the problem is and the suggested fix, as TUIFindingGroup tells a group,
+// but in the singular when n is 1.
+func TUIHealthFindings(kind string, n int) string {
+	if n != 1 {
+		return TUIFindingGroup(kind, n)
+	}
+	g, ok := findingGroups[kind]
+	one, known := healthOne[kind]
+	if !ok || !known {
+		return fmt.Sprintf("1 hallazgo de tipo «%s».", FindingKind(kind))
+	}
+	return fmt.Sprintf("1 %s: %s. Arreglo sugerido: %s.", g.one, one.what, one.fix)
+}
+
+// TUIHealthNoSkill heads the group of the findings of kind that name no
+// skill.
+func TUIHealthNoSkill(kind string) string {
+	title := FindingKind(kind)
+	if g, ok := findingGroups[kind]; ok {
+		title = g.title
+	}
+	return title + " sin skill"
+}
+
+// TUIHealthAlsoIn names the other skills a finding is listed under (A31):
+// it is one finding, whose repair is one plan.
+func TUIHealthAlsoIn(names []string) string {
+	return "También aparece en " + JoinNames(names) + ": es el mismo hallazgo, no uno por cada skill."
+}
+
+// TUIHealthAt tells apart a skill whose name another affected skill shares,
+// by where it is.
+func TUIHealthAt(name, where string) string {
+	return fmt.Sprintf("%s (%s)", SafeLine(name), SafeLine(where))
 }
