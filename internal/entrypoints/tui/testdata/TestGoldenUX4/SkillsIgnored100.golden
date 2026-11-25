@@ -13,9 +13,8 @@ Visibles: 13 · sin agente: 2 (3 desactivadas visibles, 2 activas sin agente)
 │                                      ││ Origen: owner/domain-driven-design
 │                                      ││ Actividad en skillhub: sin actividad registrada
 │                                      ││
-│                                      ││ [x] Dejar de ignorar   [enter] Ver todo
-│                                      ││
-│                                      ││
+│                                      ││ [e] Eliminar   [x] Dejar de ignorar
+│                                      ││ [enter] Ver todo
 │                                      ││
 │                                      ││
 │                                      ││
@@ -27,4 +26,5 @@ Visibles: 13 · sin agente: 2 (3 desactivadas visibles, 2 activas sin agente)
 │                                      ││
 │                                      ││
 ╰──────────────────────────────────────╯╰──────────────────────────────────────────────────────────╯
-enter ver todo • x dejar de ignorar • / buscar • f filtrar • g ver por agente • ? ayuda • q salir
+e eliminar • enter ver todo • x dejar de ignorar • / buscar • f filtrar • g ver por agente • ? ayuda
+• q salir

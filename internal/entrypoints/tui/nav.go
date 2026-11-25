@@ -209,7 +209,7 @@ func (m *Model) filterRows(rows []SkillRow) []SkillRow {
 
 // seenBy are the agents that see the row's skill: none for a disabled one.
 func (m *Model) seenBy(r SkillRow) []string {
-	if r.ParkedKey != "" {
+	if r.ParkedKey != "" || r.Project != nil {
 		return nil
 	}
 	if ids, ok := m.visibility[r.ID]; ok || m.visibility != nil {

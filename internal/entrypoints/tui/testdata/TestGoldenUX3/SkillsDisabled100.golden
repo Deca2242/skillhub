@@ -22,9 +22,9 @@ Visibles: 14 · sin agente: 3 (4 desactivadas visibles, 2 activas sin agente)
 │                                      ││ También borra sus 6 enlaces rotos.
 │                                      ││ Actividad en skillhub: sin actividad registrada
 │                                      ││
-│                                      ││ [x] Ignorar   [enter] Ver todo
-│                                      ││
+│                                      ││ [e] Eliminar   [x] Ignorar
+│                                      ││ [enter] Ver todo
 │                                      ││
 ╰──────────────────────────────────────╯╰──────────────────────────────────────────────────────────╯
-o desactivarla de verdad • enter ver todo • x ignorar • / buscar • f filtrar • g ver por agente • ?
-ayuda • q salir
+o desactivarla de verdad • e eliminar • enter ver todo • x ignorar • / buscar • f filtrar • g ver
+por agente • ? ayuda • q salir

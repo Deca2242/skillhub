@@ -32,15 +32,26 @@ func (e *Engine) NewBuilder(meta Meta) *Builder {
 	if meta.Targets == nil {
 		meta.Targets = []string{}
 	}
+	if meta.Project != nil {
+		cp := *meta.Project
+		meta.Project = &cp
+		var err error
+		if vErr := cp.Validate(); vErr != nil {
+			err = fmt.Errorf("%w: %w", ErrInvalidStep, vErr)
+		} else if gateErr := e.requireProjectScopeGate(cp, "build"); gateErr != nil {
+			err = gateErr
+		}
+		return &Builder{e: e, meta: meta, view: e.newPlanView(&cp), state: map[string]Image{}, err: err}
+	}
 	return &Builder{e: e, meta: meta, view: e.newView(), state: map[string]Image{}}
 }
 
 // current is the object's state as the plan stands.
-func (b *Builder) current(of Image) (Image, error) {
+func (b *Builder) current(of Image, allowClone bool) (Image, error) {
 	if img, ok := b.state[of.object()]; ok {
 		return img, nil
 	}
-	return b.view.image(of)
+	return b.view.observe(of, allowClone)
 }
 
 // add checks pre against the plan's current state through accept, then
@@ -61,9 +72,22 @@ func (b *Builder) addStep(s Step, accept func(cur []Image) error) error {
 	if err := s.shape(); err != nil {
 		return err
 	}
+	if b.meta.Project != nil {
+		wantKind := StepRemoveTree
+		if b.undoes != "" {
+			wantKind = StepRestoreTree
+		}
+		if s.Kind != wantKind {
+			return fmt.Errorf("%w: project-scoped builder expects %s, got %s", ErrInvalidStep, wantKind, s.Kind)
+		}
+		if len(b.steps) > 0 {
+			return fmt.Errorf("%w: project-scoped plan must have 1 step", ErrInvalidStep)
+		}
+	}
+	allowClone := stepAllowsClone(s)
 	cur := make([]Image, len(s.Pre))
 	for i := range s.Pre {
-		img, err := b.current(s.Pre[i])
+		img, err := b.current(s.Pre[i], allowClone)
 		if err != nil {
 			return err
 		}
@@ -136,6 +160,21 @@ func (b *Builder) RemoveTree(path string) error {
 	return b.add(s, func(cur []Image) error {
 		if cur[0].State != StateTree {
 			return preconditionf("%s is %s, not a folder", path, cur[0].describe())
+		}
+		return nil
+	})
+}
+
+// RemoveClone removes the whole Git clone folder at path, verifying its
+// complete contents, .git metadata, empty directories, modes and supported
+// symlinks. Ordinary RemoveTree continues to refuse clones.
+func (b *Builder) RemoveClone(path string) error {
+	s := Step{Kind: StepRemoveClone, Path: path,
+		Pre:  []Image{{Path: path, State: StateClone}},
+		Post: []Image{{Path: path, State: StateAbsent}}}
+	return b.add(s, func(cur []Image) error {
+		if cur[0].State != StateClone {
+			return preconditionf("%s is %s, not a clone", path, cur[0].describe())
 		}
 		return nil
 	})
@@ -283,6 +322,30 @@ func (b *Builder) RestoreTree(path, copyDir, treeSHA string) error {
 	})
 }
 
+// RestoreClone publishes the verified whole-clone snapshot folder copyDir,
+// which must verify to cloneSHA, at path, which must not exist.
+func (b *Builder) RestoreClone(path, copyDir, cloneSHA string) error {
+	s := Step{Kind: StepRestoreClone, Path: path, Src: copyDir,
+		Pre:  []Image{{Path: path}},
+		Post: []Image{{Path: path, State: StateClone, CloneSHA: cloneSHA}}}
+	return b.add(s, func(cur []Image) error {
+		if !validSHA256(cloneSHA) {
+			return fmt.Errorf("%w: clone digest %q is not a SHA-256", ErrInvalidStep, cloneSHA)
+		}
+		if cur[0].State != StateAbsent {
+			return preconditionf("%s is %s, not absent", path, cur[0].describe())
+		}
+		manifest, err := b.e.inspectClone(copyDir)
+		if err != nil {
+			return fmt.Errorf("%w: verify clone snapshot %s: %w", ErrSnapshotMismatch, copyDir, err)
+		}
+		if manifest.SHA != cloneSHA {
+			return fmt.Errorf("%w: %s is %s, want %s", ErrSnapshotMismatch, copyDir, manifest.SHA, cloneSHA)
+		}
+		return nil
+	})
+}
+
 // SetEffect sets the change to skillhub's state the plan makes when it
 // closes. Build checks it against the steps.
 func (b *Builder) SetEffect(eff Effect) error {
@@ -301,6 +364,11 @@ func (b *Builder) SetEffect(eff Effect) error {
 func (b *Builder) Build() (Plan, error) {
 	if b.err != nil {
 		return Plan{}, b.err
+	}
+	if b.meta.Project != nil {
+		if err := b.e.requireProjectScopeGate(*b.meta.Project, "build"); err != nil {
+			return Plan{}, err
+		}
 	}
 	p := Plan{Meta: b.meta, Steps: slices.Clone(b.steps), Effect: b.effect, Undoes: b.undoes}
 	if p.Steps == nil {

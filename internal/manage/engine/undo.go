@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"slices"
@@ -30,13 +31,21 @@ func (e *Engine) UndoPlan(id string) (Plan, error) {
 		return Plan{}, fmt.Errorf("%w: snapshot %s changed since the operation closed", ErrUnsupportedRecord, id)
 	}
 	orig := snap.Plan
-	v := e.newView()
+	if err := e.requireProjectGate(orig, "undo"); err != nil {
+		return Plan{}, err
+	}
+	v := e.newPlanView(orig.Project)
+	clones := cloneObjects(orig)
 	for _, want := range finalImages(orig) {
 		if onlyRequired(orig, want.object()) {
 			continue // not the operation's to undo; a later change is fine
 		}
-		got, err := v.image(want)
+		got, err := v.observe(want, clones[want.object()])
 		if err != nil {
+			if want.State == StateAbsent && clones[want.object()] && errors.Is(err, ErrUnsupportedTree) {
+				return Plan{}, fmt.Errorf("%w: %s changed (%v), the operation left %s",
+					ErrChangedSince, strings.SplitN(want.object(), ":", 2)[1], err, want.describe())
+			}
 			return Plan{}, err
 		}
 		if !got.same(want) {
@@ -54,7 +63,8 @@ func (e *Engine) UndoPlan(id string) (Plan, error) {
 		}
 	}
 	b := e.NewBuilder(Meta{Action: "undo", Targets: orig.Targets, Canonical: orig.Canonical,
-		Source: orig.Source, ReviewedTreeSHA: orig.ReviewedTreeSHA})
+		Source: orig.Source, ReviewedTreeSHA: orig.ReviewedTreeSHA, Project: orig.Project})
+	b.undoes = id
 	for i := len(orig.Steps) - 1; i >= 0; i-- {
 		if err := b.inverse(orig, snap, i); err != nil {
 			return Plan{}, err
@@ -63,7 +73,6 @@ func (e *Engine) UndoPlan(id string) (Plan, error) {
 	if err := b.SetEffect(orig.Effect.inverse(snap.State)); err != nil {
 		return Plan{}, err
 	}
-	b.undoes = id
 	return b.Build()
 }
 
@@ -101,6 +110,9 @@ func (e *Engine) undoable(id string) (string, error) {
 
 // inverse adds the step that undoes step i of orig.
 func (b *Builder) inverse(orig Plan, snap Snapshot, i int) error {
+	if err := b.e.requireProjectGate(orig, "undo"); err != nil {
+		return err
+	}
 	s := orig.Steps[i]
 	switch s.Kind {
 	case StepMove:
@@ -117,6 +129,14 @@ func (b *Builder) inverse(orig Plan, snap Snapshot, i int) error {
 		return b.RestoreTree(s.Path, filepath.Join(b.e.SnapshotDir(snap.SnapshotID), filepath.FromSlash(t.Copy)), t.TreeSHA)
 	case StepRestoreTree:
 		return b.RemoveTree(s.Path)
+	case StepRemoveClone:
+		t, ok := snap.treeCopy(s.Path)
+		if !ok || t.CloneSHA == "" {
+			return fmt.Errorf("%w: no clone copy of %s", ErrSnapshotNotFound, s.Path)
+		}
+		return b.RestoreClone(s.Path, filepath.Join(b.e.SnapshotDir(snap.SnapshotID), filepath.FromSlash(t.Copy)), t.CloneSHA)
+	case StepRestoreClone:
+		return b.RemoveClone(s.Path)
 	case StepRequire:
 		return nil // it changed nothing, so there is nothing to undo
 	case StepLockPark, StepLockRemove:

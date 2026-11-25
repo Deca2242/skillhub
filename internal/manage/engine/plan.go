@@ -31,6 +31,13 @@ const (
 	// StepRestoreTree publishes a verified copy of a snapshot folder at a
 	// path that does not exist; undoing a removeTree uses it.
 	StepRestoreTree StepKind = "restoreTree"
+	// StepRemoveClone removes a whole Git clone folder, verified by its
+	// complete clone digest (file bytes, .git metadata, empty directories,
+	// modes and supported symlinks), rather than treehash.Dir.
+	StepRemoveClone StepKind = "removeClone"
+	// StepRestoreClone publishes a verified whole-clone snapshot copy at a
+	// path that does not exist; undoing a removeClone uses it.
+	StepRestoreClone StepKind = "restoreClone"
 	// StepRequire changes nothing: its object must be exactly its image, a
 	// folder with its tree or a link with its content, when the plan is
 	// checked, run, verified and rolled back. It pins what a plan relies on
@@ -47,6 +54,8 @@ const (
 	StateAbsent ImageState = "absent"
 	// StateTree is a real folder (not a symlink) with TreeSHA.
 	StateTree ImageState = "tree"
+	// StateClone is a real Git clone folder (not a symlink) verified by CloneSHA.
+	StateClone ImageState = "clone"
 	// StateLink is a symlink whose content is Target, exactly.
 	StateLink ImageState = "link"
 	// StateOther is a path that is neither a folder nor a symlink. No step
@@ -67,6 +76,8 @@ type Image struct {
 	State ImageState `json:"state"`
 	// TreeSHA is the git tree SHA of a StateTree folder.
 	TreeSHA string `json:"tree_sha,omitempty"`
+	// CloneSHA is the complete whole-clone digest of a StateClone folder.
+	CloneSHA string `json:"clone_sha,omitempty"`
 	// Target is the exact content of a StateLink symlink.
 	Target string `json:"target,omitempty"`
 	// Raw is the exact bytes of a StateEntry entry.
@@ -89,7 +100,7 @@ func (i Image) object() string {
 // same reports whether two images describe the same state of an object.
 func (i Image) same(o Image) bool {
 	return i.Path == o.Path && i.Entry == o.Entry && i.State == o.State &&
-		i.TreeSHA == o.TreeSHA && i.Target == o.Target && bytes.Equal(i.Raw, o.Raw)
+		i.TreeSHA == o.TreeSHA && i.CloneSHA == o.CloneSHA && i.Target == o.Target && bytes.Equal(i.Raw, o.Raw)
 }
 
 // describe is a short account of an image for an error.
@@ -97,6 +108,8 @@ func (i Image) describe() string {
 	switch i.State {
 	case StateTree:
 		return fmt.Sprintf("folder %s", i.TreeSHA)
+	case StateClone:
+		return fmt.Sprintf("clone %s", i.CloneSHA)
 	case StateLink:
 		return fmt.Sprintf("link to %q", i.Target)
 	case StateEntry:
@@ -144,6 +157,9 @@ type Meta struct {
 	// install.
 	Source          string `json:"source,omitempty"`
 	ReviewedTreeSHA string `json:"reviewed_tree_sha,omitempty"`
+	// Project binds a project-scoped operation to its startup project
+	// directory and exact direct skill copy. Nil for global/legacy plans.
+	Project *ProjectScope `json:"project,omitempty"`
 }
 
 // Plan is an operation as the user approves it. ID is the SHA-256 of the
@@ -229,7 +245,7 @@ func (s Step) shape() error {
 			return fmt.Errorf("%w: %s %q to %q", ErrInvalidStep, s.Kind, s.Path, s.Target)
 		}
 		want = []string{"path:" + s.Path}
-	case StepRemoveTree:
+	case StepRemoveTree, StepRemoveClone:
 		if !validPath(s.Path) {
 			return fmt.Errorf("%w: remove %q", ErrInvalidStep, s.Path)
 		}
@@ -239,7 +255,7 @@ func (s Step) shape() error {
 			return fmt.Errorf("%w: require %q", ErrInvalidStep, s.Path)
 		}
 		want = []string{"path:" + s.Path}
-	case StepRestoreTree:
+	case StepRestoreTree, StepRestoreClone:
 		if !validPath(s.Path) || !validPath(s.Src) || s.Src == s.Path {
 			return fmt.Errorf("%w: restore %q from %q", ErrInvalidStep, s.Path, s.Src)
 		}

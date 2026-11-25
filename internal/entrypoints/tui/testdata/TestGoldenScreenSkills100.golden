@@ -6,19 +6,19 @@ Visibles: 15 · sin agente: 2 (4 desactivadas visibles, 2 activas sin agente)
 │ ⚠ accessibility          enlace roto ││ agent-browser
 │ ● agent-browser          sin revisar ││
 │ ● archify                sin revisar ││ En skillhub: activa
-│ ⚠ brainstorming        sin gestionar ││ Disponible en: Claude Code, Codex, Cursor, Droid, Gemini
+│ ⚠ brainstorming               manual ││ Disponible en: Claude Code, Codex, Cursor, Droid, Gemini
 │ ⚠ computer-use            modificada ││ CLI, GitHub Copilot, Kilo Code, OpenCode y Pi
 │ ⚠ domain-driven-design   enlace roto ││   Codex, Gemini CLI, OpenCode y Pi: directamente, sin
 │ ● find-skills            sin revisar ││ enlace
-│ ⚠ git-guardrails-clau…   enlace roto ││   Claude Code: por un enlace
+│ ⚠ git-guardrails-claude… enlace roto ││   Claude Code: por un enlace
 │ ● grill-me               sin revisar ││   Cursor, Droid, GitHub Copilot, Kilo Code y OpenCode:
 │ ● grill-with-docs        sin revisar ││ indeterminado (carpeta o enlaces sin verificar)
-│ ⚠ humanizer            sin gestionar ││ Origen: owner/agent-browser
-│ ⚠ i-have-adhd          sin gestionar ││ Actividad en skillhub: sin actividad registrada
-│ ● karpathy-guidelines    sin revisar ││
+│ ⚠ humanizer                   manual ││ Origen: owner/agent-browser
+│ ⚠ i-have-adhd                 manual ││ Actividad en skillhub: sin actividad registrada
+│ ● karpathy-guidelines      proveedor ││
 │ ⚠ orca-cli                modificada ││ [d] Desactivar   [e] Eliminar
 │ ⚠ orchestration           modificada ││ [l] Elegir agentes   [x] Ignorar
-│ ⚠ requirements-elicit… sin gestionar ││ [enter] Ver todo
+│ ⚠ requirements-elicitat…      manual ││ [enter] Ver todo
 │ ⚠ web-quality-audit      enlace roto ││
 │                                      ││
 │                                      ││

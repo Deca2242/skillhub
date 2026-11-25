@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"golang.org/x/sys/unix"
+
 	"skillhub/internal/shared/paths"
 	"skillhub/internal/shared/ports"
 )
@@ -142,9 +144,23 @@ func (f *FileOps) CopyTree(src, dst string) error {
 		err = os.Rename(tmp, dst)
 	}
 	if err != nil {
-		return errors.Join(err, os.RemoveAll(tmp))
+		return errors.Join(err, removeTreeWritable(tmp))
 	}
 	return f.syncDir(parent)
+}
+
+func removeTreeWritable(path string) error {
+	err := os.RemoveAll(path)
+	if !errors.Is(err, iofs.ErrPermission) {
+		return err
+	}
+	_ = filepath.WalkDir(path, func(p string, d iofs.DirEntry, walkErr error) error {
+		if walkErr == nil && d.IsDir() {
+			_ = os.Chmod(p, 0o700)
+		}
+		return nil
+	})
+	return os.RemoveAll(path)
 }
 
 // copyDirContent copies the entries of src into the existing directory dst.
@@ -268,4 +284,84 @@ func (f *FileOps) Exists(path string) (bool, error) {
 	default:
 		return false, err
 	}
+}
+
+// ReadDir lists the direct entries of dir, sorted by name, without following
+// a final symlink. It refuses forbidden paths and non-directories.
+func (f *FileOps) ReadDir(dir string) ([]iofs.DirEntry, error) {
+	if err := f.check("readdir", dir); err != nil {
+		return nil, err
+	}
+	info, err := os.Lstat(dir)
+	if err != nil {
+		return nil, err
+	}
+	if !info.IsDir() {
+		return nil, &iofs.PathError{Op: "readdir", Path: dir, Err: errors.New("not a directory")}
+	}
+	return os.ReadDir(dir)
+}
+
+// EntryMetadata inspects path without following a final symlink and reports
+// its hard-link count and whether any extended attributes or POSIX ACLs are
+// present. Inability to inspect any of these returns an error rather than
+// treating it as absence.
+func (f *FileOps) EntryMetadata(path string) (nlink uint64, hasXattrs, hasACLs bool, err error) {
+	if err := f.check("metadata", path); err != nil {
+		return 0, false, false, err
+	}
+	var st unix.Stat_t
+	for {
+		err = unix.Lstat(path, &st)
+		if !errors.Is(err, unix.EINTR) {
+			break
+		}
+	}
+	if err != nil {
+		return 0, false, false, &iofs.PathError{Op: "lstat", Path: path, Err: err}
+	}
+	var sz int
+	for {
+		sz, err = unix.Llistxattr(path, nil)
+		if !errors.Is(err, unix.EINTR) {
+			break
+		}
+	}
+	if err != nil {
+		return 0, false, false, &iofs.PathError{Op: "llistxattr", Path: path, Err: err}
+	}
+	if sz > 0 {
+		hasXattrs = true
+	}
+	switch st.Mode & unix.S_IFMT {
+	case unix.S_IFREG, unix.S_IFDIR:
+		hasACLs, err = hasPOSIXACL(path, "system.posix_acl_access")
+		if err != nil {
+			return 0, false, false, err
+		}
+		if !hasACLs && st.Mode&unix.S_IFMT == unix.S_IFDIR {
+			hasACLs, err = hasPOSIXACL(path, "system.posix_acl_default")
+			if err != nil {
+				return 0, false, false, err
+			}
+		}
+	}
+	return uint64(st.Nlink), hasXattrs, hasACLs, nil
+}
+
+func hasPOSIXACL(path, attr string) (bool, error) {
+	var err error
+	for {
+		_, err = unix.Lgetxattr(path, attr, nil)
+		if !errors.Is(err, unix.EINTR) {
+			break
+		}
+	}
+	if err == nil {
+		return true, nil
+	}
+	if errors.Is(err, unix.ENODATA) {
+		return false, nil
+	}
+	return false, &iofs.PathError{Op: "lgetxattr", Path: path, Err: err}
 }

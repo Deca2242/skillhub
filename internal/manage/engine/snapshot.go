@@ -36,12 +36,14 @@ const (
 	snapshotPrefix = "op-"
 )
 
-// TreeCopy is a folder the snapshot keeps: where it was, its tree SHA and
-// its copy, relative to the snapshot directory.
+// TreeCopy is a folder the snapshot keeps: where it was, its tree SHA (or
+// complete whole-clone digest for a clone) and its copy, relative to the
+// snapshot directory.
 type TreeCopy struct {
-	Path    string `json:"path"`
-	TreeSHA string `json:"tree_sha"`
-	Copy    string `json:"copy"`
+	Path     string `json:"path"`
+	TreeSHA  string `json:"tree_sha,omitempty"`
+	CloneSHA string `json:"clone_sha,omitempty"`
+	Copy     string `json:"copy"`
 }
 
 // LinkCopy is a symlink the snapshot keeps: its path and exact content.
@@ -158,6 +160,9 @@ func snapshotOf(p Plan) Snapshot {
 			case img.State == StateTree:
 				copyPath := filepath.ToSlash(filepath.Join(snapshotTrees, strconv.Itoa(len(snap.Trees))))
 				snap.Trees = append(snap.Trees, TreeCopy{Path: img.Path, TreeSHA: img.TreeSHA, Copy: copyPath})
+			case img.State == StateClone:
+				copyPath := filepath.ToSlash(filepath.Join(snapshotTrees, strconv.Itoa(len(snap.Trees))))
+				snap.Trees = append(snap.Trees, TreeCopy{Path: img.Path, CloneSHA: img.CloneSHA, Copy: copyPath})
 			case img.State == StateLink:
 				snap.Links = append(snap.Links, LinkCopy{Path: img.Path, Target: img.Target})
 			}
@@ -187,7 +192,7 @@ func (e *Engine) takeSnapshot(p Plan) (Snapshot, string, error) {
 	}
 	sum, err := e.writeSnapshot(snap)
 	if err != nil {
-		return Snapshot{}, "", errors.Join(fmt.Errorf("snapshot %s: %w", id, err), e.d.Files.RemoveTree(e.SnapshotDir(id)))
+		return Snapshot{}, "", errors.Join(fmt.Errorf("snapshot %s: %w", id, err), e.removeOwn(e.SnapshotDir(id)))
 	}
 	return snap, sum, nil
 }
@@ -205,6 +210,24 @@ func metaSHA(data []byte) string {
 func (e *Engine) writeSnapshot(snap Snapshot) (string, error) {
 	dir := e.SnapshotDir(snap.SnapshotID)
 	for _, t := range snap.Trees {
+		copyPath := filepath.Join(dir, filepath.FromSlash(t.Copy))
+		if snap.Plan.HasProjectScope() {
+			proj := snap.Plan.Project
+			if err := e.d.Files.MkdirAll(filepath.Dir(copyPath), 0o755); err != nil {
+				return "", fmt.Errorf("create copy parent %s: %w", filepath.Dir(copyPath), err)
+			}
+			copiedTree, err := e.d.ProjectFS.CopySkill(proj.ProjectDir, string(proj.Root), proj.SkillName, copyPath)
+			if err != nil {
+				return "", fmt.Errorf("copy %s: %w", t.Path, err)
+			}
+			if copiedTree.SHA != t.TreeSHA {
+				return "", fmt.Errorf("%w: %s is %s, the plan saw %s", ErrPlanChanged, t.Path, copiedTree.SHA, t.TreeSHA)
+			}
+			if err := e.refuseSpecialBits(copyPath, copiedTree); err != nil {
+				return "", fmt.Errorf("%w: %w", ErrSnapshotMismatch, err)
+			}
+			continue
+		}
 		mode, err := e.d.Files.Mode(t.Path)
 		if err != nil {
 			return "", fmt.Errorf("look at %s: %w", t.Path, err)
@@ -212,11 +235,23 @@ func (e *Engine) writeSnapshot(snap Snapshot) (string, error) {
 		if !mode.IsDir() {
 			return "", fmt.Errorf("%w: %s is no longer a folder", ErrSnapshotMismatch, t.Path)
 		}
-		copyPath := filepath.Join(dir, filepath.FromSlash(t.Copy))
+		if t.CloneSHA != "" {
+			srcManifest, err := e.inspectClone(t.Path)
+			if err != nil {
+				return "", err
+			}
+			if srcManifest.SHA != t.CloneSHA {
+				return "", fmt.Errorf("%w: %s is %s, the plan saw %s", ErrPlanChanged, t.Path, srcManifest.SHA, t.CloneSHA)
+			}
+		}
 		if err := e.d.Files.CopyTree(t.Path, copyPath); err != nil {
 			return "", fmt.Errorf("copy %s: %w", t.Path, err)
 		}
-		if err := e.verifyCopy(t.Path, copyPath, t.TreeSHA); err != nil {
+		if t.CloneSHA != "" {
+			if err := e.verifyCloneCopy(t.Path, copyPath, t.CloneSHA); err != nil {
+				return "", err
+			}
+		} else if err := e.verifyCopy(t.Path, copyPath, t.TreeSHA); err != nil {
 			return "", err
 		}
 	}
@@ -410,7 +445,14 @@ func (e *Engine) verifySnapshot(id string) (Snapshot, string, error) {
 		return Snapshot{}, "", err
 	}
 	for _, t := range snap.Trees {
-		tree, err := e.d.HashDir(filepath.Join(e.SnapshotDir(id), filepath.FromSlash(t.Copy)))
+		copyDir := filepath.Join(e.SnapshotDir(id), filepath.FromSlash(t.Copy))
+		if t.CloneSHA != "" {
+			if err := e.verifyCloneSnapshotCopy(t.Path, copyDir, t.CloneSHA); err != nil {
+				return Snapshot{}, "", fmt.Errorf("snapshot %s: %w", id, err)
+			}
+			continue
+		}
+		tree, err := e.d.HashDir(copyDir)
 		if err != nil {
 			return Snapshot{}, "", fmt.Errorf("snapshot %s: hash the copy of %s: %w", id, t.Path, err)
 		}

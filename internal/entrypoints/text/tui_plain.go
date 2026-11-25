@@ -39,6 +39,8 @@ const (
 	TUIRowUnchecked = "sin revisar"
 	TUIRowUpdate    = "actualizar"
 	TUIRowDisabled  = "desactivada"
+	TUIRowManual    = "manual"
+	TUIRowProvider  = "proveedor"
 	TUIRowUnmanaged = "sin gestionar"
 	TUIRowIgnored   = "ignorada"
 )
@@ -320,12 +322,49 @@ func TUIPlanSummary(p app.Proposal, name AgentNamer) Summary {
 			s.Lines = append(s.Lines, reloadIn(p.Reload, name))
 		}
 	case app.ActionRemove:
-		s.Question = fmt.Sprintf("¿Eliminar %s?", SafeLine(r.Key))
-		first := gone()
-		if p.Remove != nil && p.Remove.Parked {
-			first = "Está desactivada: ningún agente la ve ahora."
+		if p.Remove != nil && p.Remove.Project {
+			name := SafeLine(p.Remove.SkillName)
+			root := SafeLine(p.Remove.ProjectRoot)
+			s.Question = fmt.Sprintf("¿Eliminar %s (%s de este proyecto)?", name, root)
+			first := fmt.Sprintf("Solo se quita la copia de este proyecto en %s; las demás skills no se tocan.", root)
+			second := fmt.Sprintf("Carpeta: %s. Se mueve a la papelera de skillhub: se deshace desde este mismo proyecto con z o en el Historial (h).", SafeLine(p.Remove.Folder))
+			s.Lines = []string{first, second}
+			break
 		}
-		s.Lines = []string{first, "Su carpeta se mueve a la papelera de skillhub: se deshace con z enseguida, o desde el Historial (h)."}
+		label := r.Key
+		if p.Remove != nil && p.Remove.Key != "" {
+			label = p.Remove.Key
+		}
+		s.Question = fmt.Sprintf("¿Eliminar %s?", SafeLine(label))
+		first := gone()
+		switch {
+		case p.Remove != nil && p.Remove.Parked:
+			first = "Está desactivada: ningún agente la ve ahora."
+		case p.Remove != nil && p.Remove.Off:
+			if who == "" {
+				first = "Está desactivada a mano en OFF/: ningún agente la ve ahora."
+			} else {
+				first = fmt.Sprintf("Está desactivada a mano en OFF/, pero dejará de estar disponible en %s.", who)
+			}
+		}
+		second := "Su carpeta se mueve a la papelera de skillhub: se deshace con z enseguida, o desde el Historial (h)."
+		if p.Remove != nil {
+			switch {
+			case p.Remove.Folder == "" && p.Remove.Parked:
+				second = "Solo se descarta su registro desactivado (no tiene carpeta): se deshace con z enseguida, o desde el Historial (h)."
+			case p.Remove.Folder != "" && len(p.Remove.Links) > 0:
+				links := make([]string, 0, len(p.Remove.Links))
+				for _, l := range p.Remove.Links {
+					links = append(links, SafeLine(l.Path))
+				}
+				second = fmt.Sprintf("Carpeta: %s (enlaces que se quitan: %s). Se mueve a la papelera de skillhub: se deshace con z enseguida, o desde el Historial (h).",
+					SafeLine(p.Remove.Folder), strings.Join(links, ", "))
+			case p.Remove.Folder != "":
+				second = fmt.Sprintf("Carpeta: %s. Se mueve a la papelera de skillhub: se deshace con z enseguida, o desde el Historial (h).",
+					SafeLine(p.Remove.Folder))
+			}
+		}
+		s.Lines = []string{first, second}
 		if p.Remove != nil && p.Remove.Modified == "yes" {
 			s.Lines = append(s.Lines, "Tus cambios en ella también quedan en la papelera.")
 		}
@@ -428,7 +467,15 @@ func TUIDone(res app.Result, name AgentNamer) string {
 	case app.ActionLink:
 		first = fmt.Sprintf("Listo: %s está disponible en %s.", SafeLine(r.Key), SafeLine(name(r.Harness)))
 	case app.ActionRemove:
-		first = fmt.Sprintf("Listo: %s se movió a la papelera de skillhub.", SafeLine(r.Key))
+		if p.Remove != nil && p.Remove.Project {
+			first = fmt.Sprintf("Listo: %s (%s) se movió a la papelera de skillhub.", SafeLine(p.Remove.SkillName), SafeLine(p.Remove.ProjectRoot))
+			break
+		}
+		label := r.Key
+		if p.Remove != nil && p.Remove.Key != "" {
+			label = p.Remove.Key
+		}
+		first = fmt.Sprintf("Listo: %s se movió a la papelera de skillhub.", SafeLine(label))
 	case app.ActionInstall, app.ActionReinstall:
 		key := r.Key
 		if p.Install != nil {
@@ -672,6 +719,12 @@ func TUIOperationDid(action domain.HistoryAction, op app.OperationView) string {
 		return TUIHistoryFailedV2
 	}
 	what := JoinNames(op.Keys)
+	if what == "" && op.Label != "" {
+		what = SafeLine(op.Label)
+		if op.ProjectDir != "" {
+			what = fmt.Sprintf("%s (proyecto)", what)
+		}
+	}
 	if what == "" {
 		what = TUIHistoryNoSkill
 	}
@@ -680,7 +733,7 @@ func TUIOperationDid(action domain.HistoryAction, op app.OperationView) string {
 		if r, ok := plainRepairs[op.Action]; ok {
 			name = strings.ToLower(r[:1]) + r[1:]
 		}
-		if len(op.Keys) == 0 {
+		if len(op.Keys) == 0 && op.Label == "" {
 			return fmt.Sprintf("Deshiciste «%s»", name)
 		}
 		return fmt.Sprintf("Deshiciste «%s» de %s", name, what)

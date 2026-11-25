@@ -27,6 +27,7 @@ func TestEveryRefusalKindHasItsMessage(t *testing.T) {
 		app.ErrNoEntryToReinstall, app.ErrEntryPinsRef, app.ErrSourceMismatch, app.ErrLinkedLinkDir,
 		app.ErrCanonicalNotUsed, app.ErrRepoNotFound, app.ErrRefNotFound, app.ErrRateLimited,
 		app.ErrNotAuthenticated, app.ErrGitHubUnavailable, app.ErrLockUnsupported, app.ErrLockMalformed, app.ErrStagingFailed,
+		app.ErrNoProject, app.ErrProjectLinked, app.ErrWrongProject, app.ErrCrossDevice,
 	}
 	seen := map[string]error{}
 	req := app.Request{Action: app.ActionDisable, Key: "alpha", Harness: "codex"}

@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	iofs "io/fs"
 	"os"
 	"path/filepath"
@@ -369,6 +370,20 @@ func (f *faultFiles) Chmod(path string, perm iofs.FileMode) error {
 
 func (f *faultFiles) RemoveTree(path string) error {
 	return f.write("RemoveTree", path, func() error { return f.Files.RemoveTree(path) })
+}
+
+func (f *faultFiles) ReadDir(dir string) ([]iofs.DirEntry, error) {
+	if dr, ok := f.Files.(engine.DirReader); ok {
+		return dr.ReadDir(dir)
+	}
+	return nil, fmt.Errorf("%w: %s: ReadDir not supported", engine.ErrUnsupportedTree, dir)
+}
+
+func (f *faultFiles) EntryMetadata(path string) (uint64, bool, bool, error) {
+	if mr, ok := f.Files.(engine.EntryMetadataReader); ok {
+		return mr.EntryMetadata(path)
+	}
+	return 0, false, false, fmt.Errorf("%w: %s: EntryMetadata not supported", engine.ErrUnsupportedTree, path)
 }
 
 // faultLinks, faultLock, faultDrop and faultState send the writes of the

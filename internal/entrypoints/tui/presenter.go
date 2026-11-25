@@ -41,6 +41,9 @@ type SkillRow struct {
 	Issues    string
 	// ParkedKey is the key of a disabled skill's row: A enables it.
 	ParkedKey string
+	// Project is set for a direct skill entry under .agents/skills or
+	// .claude/skills of the current startup project.
+	Project *app.ProjectSkillView
 	// Kind picks the row's icon and Short is its short state, as the
 	// Skills list shows them (S13).
 	Kind  RowKind
@@ -129,6 +132,87 @@ func PresentParked(parked []app.ParkedSkill, query string) []SkillRow {
 		out = append(out, row)
 	}
 	return out
+}
+
+// PresentProjectSkills formats direct project-scoped skill entries into rows
+// and filters them by query without mixing them with global store keys.
+func PresentProjectSkills(ps []app.ProjectSkillView, query string) []SkillRow {
+	q := strings.ToLower(strings.TrimSpace(query))
+	out := make([]SkillRow, 0, len(ps))
+	for _, p := range ps {
+		cp := p
+		kind := RowOK
+		short := "proyecto · " + text.SafeLine(p.Root)
+		if p.Root == "" {
+			short = "proyecto"
+		}
+		switch {
+		case p.Linked:
+			kind = RowWarn
+			short = "proyecto · enlace"
+		case p.HasGit:
+			kind = RowWarn
+			short = "proyecto · git"
+		case !p.Removable:
+			kind = RowWarn
+			short = "proyecto · no elegible"
+		}
+		harns := text.SafeLine(p.Root)
+		if harns == "" {
+			harns = msgEmpty
+		}
+		row := SkillRow{
+			ID:        p.ID,
+			RawName:   p.Name,
+			Name:      text.SafeLine(p.Name),
+			Origin:    "proyecto",
+			Harnesses: harns,
+			State:     short,
+			Issues:    msgEmpty,
+			Project:   &cp,
+			Kind:      kind,
+			Short:     short,
+		}
+		if q != "" && !matchesSkillQuery(row, q) {
+			continue
+		}
+		out = append(out, row)
+	}
+	return out
+}
+
+func projectNonRemovableReason(p app.ProjectSkillView) string {
+	switch {
+	case p.Linked:
+		return "Es un enlace simbólico o está bajo una raíz enlazada: skillhub solo elimina carpetas reales del proyecto actual y conserva su destino intacto."
+	case p.HasGit:
+		return "Contiene metadatos .git: skillhub no elimina repositorios ni clones desde el proyecto."
+	default:
+		return "No es una carpeta real independiente con SKILL.md en .agents/skills o .claude/skills de este proyecto."
+	}
+}
+
+// PresentProjectSkillDetail renders the full read-only detail box for a
+// current-project skill entry.
+func PresentProjectSkillDetail(p app.ProjectSkillView) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "Skill: %s\n", text.SafeLine(p.Name))
+	fmt.Fprintf(&b, "ID: %s\n", text.SafeLine(p.ID))
+	fmt.Fprintf(&b, "Ámbito: proyecto actual\n")
+	fmt.Fprintf(&b, "Proyecto: %s\n", text.SafeLine(p.ProjectDir))
+	if p.Root != "" {
+		fmt.Fprintf(&b, "Raíz: %s\n", text.SafeLine(p.Root))
+	}
+	fmt.Fprintf(&b, "Carpeta: %s\n", text.SafeLine(p.Path))
+	if p.TreeSHA != "" {
+		fmt.Fprintf(&b, "Árbol: %s\n", ShortSHA(p.TreeSHA))
+	}
+	if p.Removable {
+		b.WriteString("Estado: carpeta real elegible para eliminar ([e] Eliminar)\n")
+	} else {
+		fmt.Fprintf(&b, "Motivo: %s\n", projectNonRemovableReason(p))
+	}
+	return b.String()
 }
 
 func matchesSkillQuery(r SkillRow, q string) bool {

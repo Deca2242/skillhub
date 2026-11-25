@@ -38,3 +38,13 @@ func NewFileOpsWithSync(guard paths.Guard, sync func(f *os.File) error) *FileOps
 	f.fsync = sync
 	return f
 }
+
+// NewProjectOpsForTest builds a ProjectOps with a custom rename function for
+// testing EXDEV and kernel rename error handling.
+func NewProjectOpsForTest(guard paths.Guard, rename func(olddirfd int, oldpath string, newdirfd int, newpath string, flags uint) error) *ProjectOps {
+	ops := NewProjectOps(guard)
+	if rename != nil {
+		ops.rename = rename
+	}
+	return ops
+}

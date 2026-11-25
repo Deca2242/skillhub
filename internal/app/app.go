@@ -85,6 +85,11 @@ type Deps struct {
 	// /.well-known/agent-skills/ (install.go, S14, L84). It is optional:
 	// without it a website install fails with ErrMissingDependency.
 	Web ports.HTTPSFetcher
+
+	// ProjectDir and Project enable exact inspection, removal, and same-project
+	// undo for real skill directories in the startup project directory.
+	ProjectDir string
+	Project    ProjectPort
 }
 
 func (d Deps) validate() error {
@@ -109,8 +114,9 @@ func (d Deps) validate() error {
 
 // App is the use-case facade.
 type App struct {
-	d   Deps
-	upd *updates.Service
+	d          Deps
+	upd        *updates.Service
+	projectDir string
 }
 
 // New builds an App.
@@ -118,7 +124,7 @@ func New(d Deps) (*App, error) {
 	if err := d.validate(); err != nil {
 		return nil, err
 	}
-	a := &App{d: d}
+	a := &App{d: d, projectDir: normalizeProjectDir(d.Paths, d.ProjectDir)}
 	upd, err := updates.New(updates.Deps{
 		Paths: d.Paths, Files: d.Files, Dirs: d.Dirs, Lock: d.Lock, State: d.State,
 		GitHub: d.GitHub, Clock: d.Clock, HashDir: d.HashDir,

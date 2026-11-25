@@ -13,9 +13,11 @@ bin/
 .DS_Store
 
 # Private development files: they stay in the private branches and never go public
+/AGENTS.md
 /CLAUDE.md
 /START-HERE.md
 /odd/
 /docs/
+/.agents/
 /.claude/
 /skills-lock.json

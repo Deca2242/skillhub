@@ -108,6 +108,9 @@ func TUIRefusal(err error, req app.Request) (msg string, ok bool) {
 
 var tuiRefusalTexts = []refusalText{
 	{app.ErrNotFound, func(req app.Request, _ []string) string {
+		if strings.HasPrefix(req.Key, "project:") {
+			return fmt.Sprintf("no se encontró la skill «%s» en este proyecto", SafeLine(req.Key))
+		}
 		return fmt.Sprintf("esta skill no está en el almacén de skillhub, así que no se puede %s desde aquí. Mira Salud (4) para ver cómo ordenarla",
 			lookup(plainActions, string(req.Action)))
 	}},

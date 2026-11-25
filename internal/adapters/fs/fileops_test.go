@@ -1,6 +1,7 @@
 package fs_test
 
 import (
+	"encoding/binary"
 	"errors"
 	iofs "io/fs"
 	"os"
@@ -9,6 +10,8 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+
+	"golang.org/x/sys/unix"
 
 	fsadapter "skillhub/internal/adapters/fs"
 	"skillhub/internal/shared/paths"
@@ -335,5 +338,222 @@ func TestFailingFileOpsOverTheRealAdapter(t *testing.T) {
 	}
 	if calls := ops.Calls(); len(calls) != 2 || calls[0].Op != "WriteFileAtomic" {
 		t.Errorf("recorded calls = %+v", calls)
+	}
+}
+
+func TestRealFileOpsReadDir(t *testing.T) {
+	base := t.TempDir()
+	forbidden := filepath.Join(base, "forbidden")
+	mustNoErr(t, "mkdir forbidden", os.MkdirAll(forbidden, 0o755))
+	mustNoErr(t, "seed forbidden", os.WriteFile(filepath.Join(forbidden, "secret"), []byte("keep"), 0o644))
+
+	root := filepath.Join(base, "root")
+	mustNoErr(t, "mkdir .git", os.MkdirAll(filepath.Join(root, ".git", "refs", "tags"), 0o755))
+	mustNoErr(t, "mkdir empty", os.MkdirAll(filepath.Join(root, "empty"), 0o755))
+	mustNoErr(t, "write file", os.WriteFile(filepath.Join(root, "SKILL.md"), []byte("skill"), 0o600))
+	mustNoErr(t, "symlink", os.Symlink("SKILL.md", filepath.Join(root, "README.md")))
+	dirLink := filepath.Join(base, "dir-link")
+	mustNoErr(t, "dir symlink", os.Symlink(root, dirLink))
+	forbiddenLink := filepath.Join(base, "forbidden-link")
+	mustNoErr(t, "forbidden symlink", os.Symlink(forbidden, forbiddenLink))
+
+	before, err := treehash.Dir(forbidden)
+	mustNoErr(t, "hash forbidden before", err)
+
+	ops := fsadapter.NewFileOps(paths.NewGuard(forbidden))
+	entries, err := ops.ReadDir(root)
+	mustNoErr(t, "ReadDir root", err)
+	var names []string
+	for _, en := range entries {
+		names = append(names, en.Name())
+	}
+	want := []string{".git", "README.md", "SKILL.md", "empty"}
+	if !slices.Equal(names, want) {
+		t.Errorf("ReadDir(root) = %v, want %v", names, want)
+	}
+
+	if _, err := ops.ReadDir(dirLink); err == nil {
+		t.Error("ReadDir followed a final symlink")
+	}
+	if _, err := ops.ReadDir(filepath.Join(root, "SKILL.md")); err == nil {
+		t.Error("ReadDir succeeded on a regular file")
+	}
+	if _, err := ops.ReadDir(forbidden); !errors.Is(err, paths.ErrForbidden) {
+		t.Errorf("ReadDir(forbidden) = %v, want ErrForbidden", err)
+	}
+	if _, err := ops.ReadDir(forbiddenLink); !errors.Is(err, paths.ErrForbidden) {
+		t.Errorf("ReadDir(forbiddenLink) = %v, want ErrForbidden", err)
+	}
+	if _, err := ops.ReadDir("relative"); !errors.Is(err, paths.ErrInvalidPath) {
+		t.Errorf("ReadDir(relative) = %v, want ErrInvalidPath", err)
+	}
+
+	after, err := treehash.Dir(forbidden)
+	mustNoErr(t, "hash forbidden after", err)
+	if before.SHA != after.SHA {
+		t.Errorf("forbidden dir changed: %s -> %s", before.SHA, after.SHA)
+	}
+}
+
+func TestRealCopyTreeFailureCleansUpReadOnlySubdirs(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "src")
+	ro := filepath.Join(src, "a-readonly")
+	mustNoErr(t, "mkdir ro", os.MkdirAll(ro, 0o755))
+	mustNoErr(t, "seed ro", os.WriteFile(filepath.Join(ro, "data"), []byte("x"), 0o444))
+	mustNoErr(t, "chmod ro", os.Chmod(ro, 0o555))
+	t.Cleanup(func() { _ = os.Chmod(ro, 0o755) })
+	mustNoErr(t, "mkfifo", syscall.Mkfifo(filepath.Join(src, "z-pipe"), 0o644))
+
+	ops := fsadapter.NewFileOps(paths.Guard{})
+	if err := ops.CopyTree(src, filepath.Join(dir, "dst")); err == nil {
+		t.Fatal("CopyTree with a named pipe succeeded")
+	}
+	if got := dirNames(t, dir); !slices.Equal(got, []string{"src"}) {
+		t.Errorf("dir after failed CopyTree = %v, want only src", got)
+	}
+}
+
+func posixACLTestBytes(perm uint16) []byte {
+	type aclEntry struct {
+		tag  uint16
+		perm uint16
+		id   uint32
+	}
+	const undefID = ^uint32(0)
+	entries := []aclEntry{
+		{tag: 0x0001, perm: perm, id: undefID},
+		{tag: 0x0002, perm: 4, id: 65534},
+		{tag: 0x0004, perm: perm, id: undefID},
+		{tag: 0x0010, perm: perm, id: undefID},
+		{tag: 0x0020, perm: 4, id: undefID},
+	}
+	buf := make([]byte, 4+len(entries)*8)
+	binary.LittleEndian.PutUint32(buf[0:4], 2)
+	for i, en := range entries {
+		off := 4 + i*8
+		binary.LittleEndian.PutUint16(buf[off:off+2], en.tag)
+		binary.LittleEndian.PutUint16(buf[off+2:off+4], en.perm)
+		binary.LittleEndian.PutUint32(buf[off+4:off+8], en.id)
+	}
+	return buf
+}
+
+func setXattrOrSkip(t *testing.T, path, attr string, data []byte) {
+	t.Helper()
+	err := unix.Lsetxattr(path, attr, data, 0)
+	if errors.Is(err, unix.EOPNOTSUPP) || errors.Is(err, unix.ENOTSUP) {
+		t.Skipf("filesystem does not support %s on %s: %v", attr, path, err)
+	}
+	mustNoErr(t, "Lsetxattr "+attr, err)
+}
+
+func TestRealFileOpsEntryMetadata(t *testing.T) {
+	base := t.TempDir()
+	forbidden := filepath.Join(base, "forbidden")
+	mustNoErr(t, "mkdir forbidden", os.MkdirAll(forbidden, 0o755))
+	mustNoErr(t, "seed forbidden", os.WriteFile(filepath.Join(forbidden, "secret"), []byte("keep"), 0o644))
+	before, err := treehash.Dir(forbidden)
+	mustNoErr(t, "hash forbidden", err)
+
+	root := filepath.Join(base, "root")
+	mustNoErr(t, "mkdir root", os.MkdirAll(filepath.Join(root, "dir"), 0o755))
+	plainFile := filepath.Join(root, "plain.txt")
+	mustNoErr(t, "write plain", os.WriteFile(plainFile, []byte("plain"), 0o644))
+
+	hardA := filepath.Join(root, "hard-a.txt")
+	hardB := filepath.Join(root, "hard-b.txt")
+	mustNoErr(t, "write hardA", os.WriteFile(hardA, []byte("hard"), 0o644))
+	mustNoErr(t, "link hardB", os.Link(hardA, hardB))
+
+	plainLink := filepath.Join(root, "plain-link")
+	mustNoErr(t, "symlink plain", os.Symlink("hard-a.txt", plainLink))
+	hardLinkA := filepath.Join(root, "sym-a")
+	hardLinkB := filepath.Join(root, "sym-b")
+	mustNoErr(t, "symlink sym-a", os.Symlink("plain.txt", hardLinkA))
+	mustNoErr(t, "hardlink symlink", unix.Linkat(unix.AT_FDCWD, hardLinkA, unix.AT_FDCWD, hardLinkB, 0))
+
+	forbiddenLink := filepath.Join(base, "forbidden-link")
+	mustNoErr(t, "forbidden symlink", os.Symlink(filepath.Join(forbidden, "secret"), forbiddenLink))
+
+	ops := fsadapter.NewFileOps(paths.NewGuard(forbidden))
+
+	if nlink, hasX, hasACL, err := ops.EntryMetadata(plainFile); err != nil || nlink != 1 || hasX || hasACL {
+		t.Errorf("plain file = (%d, %t, %t, %v), want (1, false, false, nil)", nlink, hasX, hasACL, err)
+	}
+	if nlink, hasX, hasACL, err := ops.EntryMetadata(filepath.Join(root, "dir")); err != nil || nlink < 2 || hasX || hasACL {
+		t.Errorf("plain dir = (%d, %t, %t, %v), want (>=2, false, false, nil)", nlink, hasX, hasACL, err)
+	}
+	// Symlink does not follow target hardA (which has nlink == 2).
+	if nlink, hasX, hasACL, err := ops.EntryMetadata(plainLink); err != nil || nlink != 1 || hasX || hasACL {
+		t.Errorf("plain symlink = (%d, %t, %t, %v), want (1, false, false, nil)", nlink, hasX, hasACL, err)
+	}
+	if nlink, _, _, err := ops.EntryMetadata(hardA); err != nil || nlink != 2 {
+		t.Errorf("hardlinked file = (%d, %v), want (2, nil)", nlink, err)
+	}
+	if nlink, _, _, err := ops.EntryMetadata(hardLinkA); err != nil || nlink != 2 {
+		t.Errorf("hardlinked symlink = (%d, %v), want (2, nil)", nlink, err)
+	}
+
+	if _, _, _, err := ops.EntryMetadata(filepath.Join(forbidden, "secret")); !errors.Is(err, paths.ErrForbidden) {
+		t.Errorf("forbidden path = %v, want ErrForbidden", err)
+	}
+	if _, _, _, err := ops.EntryMetadata(forbiddenLink); !errors.Is(err, paths.ErrForbidden) {
+		t.Errorf("forbidden symlink = %v, want ErrForbidden", err)
+	}
+	if _, _, _, err := ops.EntryMetadata("relative/path"); !errors.Is(err, paths.ErrInvalidPath) {
+		t.Errorf("relative path = %v, want ErrInvalidPath", err)
+	}
+
+	// Uninspectable entry under a mode-0000 directory must fail rather than
+	// reporting absence (skip if running as root where DAC_OVERRIDE bypasses 0000).
+	if os.Geteuid() != 0 {
+		lockedDir := filepath.Join(root, "locked")
+		lockedFile := filepath.Join(lockedDir, "inside")
+		mustNoErr(t, "mkdir locked", os.Mkdir(lockedDir, 0o755))
+		mustNoErr(t, "write inside", os.WriteFile(lockedFile, []byte("x"), 0o644))
+		mustNoErr(t, "chmod 0000", os.Chmod(lockedDir, 0o000))
+		t.Cleanup(func() { _ = os.Chmod(lockedDir, 0o755) })
+		if _, _, _, err := ops.EntryMetadata(lockedFile); err == nil {
+			t.Error("EntryMetadata inside 0000 dir succeeded, want error")
+		}
+	}
+
+	t.Run("xattrs", func(t *testing.T) {
+		xFile := filepath.Join(root, "xfile.txt")
+		mustNoErr(t, "write xfile", os.WriteFile(xFile, []byte("x"), 0o644))
+		setXattrOrSkip(t, xFile, "user.skillhub", []byte("1"))
+		if _, hasX, _, err := ops.EntryMetadata(xFile); err != nil || !hasX {
+			t.Errorf("xattr file = (hasX=%t, %v), want (true, nil)", hasX, err)
+		}
+
+		xDir := filepath.Join(root, "xdir")
+		mustNoErr(t, "mkdir xdir", os.Mkdir(xDir, 0o755))
+		setXattrOrSkip(t, xDir, "user.skillhub", []byte("dir"))
+		if _, hasX, _, err := ops.EntryMetadata(xDir); err != nil || !hasX {
+			t.Errorf("xattr dir = (hasX=%t, %v), want (true, nil)", hasX, err)
+		}
+	})
+
+	t.Run("acls", func(t *testing.T) {
+		aclFile := filepath.Join(root, "aclfile.txt")
+		mustNoErr(t, "write aclfile", os.WriteFile(aclFile, []byte("x"), 0o644))
+		setXattrOrSkip(t, aclFile, "system.posix_acl_access", posixACLTestBytes(6))
+		if _, _, hasACL, err := ops.EntryMetadata(aclFile); err != nil || !hasACL {
+			t.Errorf("acl file = (hasACL=%t, %v), want (true, nil)", hasACL, err)
+		}
+
+		aclDir := filepath.Join(root, "acldir")
+		mustNoErr(t, "mkdir acldir", os.Mkdir(aclDir, 0o755))
+		setXattrOrSkip(t, aclDir, "system.posix_acl_default", posixACLTestBytes(7))
+		if _, _, hasACL, err := ops.EntryMetadata(aclDir); err != nil || !hasACL {
+			t.Errorf("default acl dir = (hasACL=%t, %v), want (true, nil)", hasACL, err)
+		}
+	})
+
+	after, err := treehash.Dir(forbidden)
+	mustNoErr(t, "hash forbidden after", err)
+	if before.SHA != after.SHA {
+		t.Errorf("forbidden dir changed: %s -> %s", before.SHA, after.SHA)
 	}
 }

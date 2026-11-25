@@ -29,7 +29,7 @@ func TestSkillsListShowsAnIconAndAShortStatePerRow(t *testing.T) {
 	for _, want := range []*regexp.Regexp{
 		regexp.MustCompile(`● archify +sin revisar`),
 		regexp.MustCompile(`○ agent-browser +desactivada`),
-		regexp.MustCompile(`⚠ humanizer +sin gestionar`),
+		regexp.MustCompile(`⚠ humanizer +manual`),
 		regexp.MustCompile(`⚠ orca-cli +modificada`),
 	} {
 		if !want.MatchString(got) {
@@ -72,7 +72,7 @@ func TestSkillsPanelTellsTheSelectedSkill(t *testing.T) {
 	m = openSized(t, mc.newApp(), 100, 40)
 	selectSkill(t, m, "humanizer")
 	got = screen(m)
-	for _, want := range []string{"own copy", "Origen: " + text.TUIPanelNoOrigin, "No tiene un origen registrado", "skillhub no la gestiona"} {
+	for _, want := range []string{"own copy", "Instalación manual", "Recomendado: [e] Eliminar", "Origen: " + text.TUIPanelNoOrigin, "No tiene un origen registrado", "skillhub no la gestiona"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("the panel of humanizer lacks %q:\n%s", want, got)
 		}
@@ -82,8 +82,8 @@ func TestSkillsPanelTellsTheSelectedSkill(t *testing.T) {
 	}
 }
 
-// A disabled skill's row offers only to enable it, in the panel and in the
-// keys under it.
+// A disabled skill's row offers to enable or remove it, in the panel and in
+// the keys under it.
 func TestADisabledRowOffersOnlyToEnable(t *testing.T) {
 	mc := newMachine(t)
 	a := mc.newApp()
@@ -91,10 +91,12 @@ func TestADisabledRowOffersOnlyToEnable(t *testing.T) {
 	m := openSized(t, a, 100, 40)
 	selectSkill(t, m, "agent-browser")
 	got := screen(m)
-	if !strings.Contains(got, text.TUIActionEnable) || !strings.Contains(got, text.TUIKeyEnable) {
-		t.Errorf("the disabled row does not offer A:\n%s", got)
+	for _, want := range []string{text.TUIActionEnable, text.TUIKeyEnable, text.TUIActionRemove, text.TUIKeyRemove} {
+		if !strings.Contains(got, want) {
+			t.Errorf("the disabled row does not offer %q:\n%s", want, got)
+		}
 	}
-	for _, unwanted := range []string{text.TUIActionDisable, text.TUIActionRemove, text.TUIKeyDisable, text.TUIKeyAgents} {
+	for _, unwanted := range []string{text.TUIActionDisable, text.TUIKeyDisable, text.TUIKeyAgents} {
 		if strings.Contains(got, unwanted) {
 			t.Errorf("the disabled row offers %q:\n%s", unwanted, got)
 		}

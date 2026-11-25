@@ -234,15 +234,35 @@ func (a *App) observeSightings(ctx context.Context) (map[string][]Sighting, erro
 	return out, nil
 }
 
+// Confirmed external provider identifiers for SkillActions.Provider.
+const (
+	ProviderClaudePlugin = "claude-plugin"
+	ProviderClaudeSynced = "claude-synced"
+	ProviderGentleAI     = "gentle-ai"
+	ProviderCursor       = "cursor"
+	ProviderCodex        = "codex"
+)
+
 // SkillActions is what the app can plan now for one skill of the graph,
 // decided by the planners themselves on one observation: an action is
 // offered only when its planner, given the same graph, returns a plan.
 type SkillActions struct {
 	// Key is the store key the planners take; "" when the skill is not in
 	// the store.
-	Key     string
-	Disable bool
-	Remove  bool
+	Key string
+	// RemoveKey is the exact removal target passed to ActionRemove when
+	// Remove is true (a store key, dir:<home-rel>, lock:<name> or parked:<key>).
+	RemoveKey string
+	Disable   bool
+	Remove    bool
+	// Manual is true when the skill is a confirmed independent manual
+	// installation: no recorded origin, no foreign zone, unambiguous claim,
+	// and every observed folder confirmed free of .git.
+	Manual bool
+	// Provider is the confirmed external provider or plugin manager that owns
+	// the skill when it lies in a foreign provider/plugin zone; empty when
+	// ownership is not proven.
+	Provider string
 	// Unlink are the detected harnesses whose link to the skill the app can
 	// remove.
 	Unlink []string
@@ -332,8 +352,9 @@ func (m *manager) skillActions(g graph.Graph, found []doctor.Finding) (map[strin
 	// its own function, so it gets one that returns g.
 	m.remove = remove.New(remove.Deps{
 		Paths: a.d.Paths, Planner: m.engine, Lock: a.d.ManagedLock, State: a.d.State,
-		Observe: func() (graph.Graph, error) { return g, nil }, Profiles: m.profiles,
+		Observe: func() (graph.Graph, error) { return g, nil }, Harnesses: m.harnesses, Profiles: m.profiles,
 		Dirs: a.d.Dirs, Links: a.d.Links, Files: a.d.Files, HashDir: a.d.HashDir,
+		ProjectDir: a.projectDir, Project: a.d.Project,
 	})
 
 	var offKeys []string
@@ -343,40 +364,128 @@ func (m *manager) skillActions(g graph.Graph, found []doctor.Finding) (map[strin
 		}
 		slices.Sort(offKeys)
 	}
-	entries := make(map[string]string, len(g.Folders))
+	folders := make(map[string]graph.Folder, len(g.Folders))
 	for _, f := range g.Folders {
-		entries[f.Path] = f.Entry
+		folders[f.Path] = f
 	}
 	off := filepath.Join(g.Store, inventory.OffDirName)
 
 	out := make(map[string]SkillActions, len(g.Skills))
 	for _, s := range g.Skills {
 		var acts SkillActions
-		entry := entries[s.Canonical]
+		entry := folders[s.Canonical].Entry
 		switch dir, base := filepath.Dir(entry), filepath.Base(entry); {
 		case s.Canonical == "":
+			if len(s.Folders) == 1 && (s.Zone == graph.ZoneNone || s.Zone == graph.ZoneProfile) {
+				if rel, ok := a.d.Paths.HomeRel(folders[s.Folders[0]].Entry); ok {
+					target := domain.DirID(rel)
+					if _, err := m.remove.Remove(target); err == nil {
+						acts.Remove = true
+						acts.RemoveKey = target
+					}
+				}
+			}
 		case dir == g.Store:
-			acts = m.storeActions(g, base)
-		case dir == off && slices.Contains(offKeys, base):
-			acts.Off, acts.OffKey, acts.OffKeys = true, base, slices.Clone(offKeys)
+			acts = m.storeActions(g, base, entry)
+		case dir == off:
+			if slices.Contains(offKeys, base) {
+				acts.Off, acts.OffKey, acts.OffKeys = true, base, slices.Clone(offKeys)
+			}
+			if rel, ok := a.d.Paths.HomeRel(entry); ok {
+				target := domain.DirID(rel)
+				if _, err := m.remove.Remove(target); err == nil {
+					acts.Remove = true
+					acts.RemoveKey = target
+				}
+			}
 		}
+		acts.Manual = isManualSkill(s, folders)
+		acts.Provider = a.providerOf(s, entry)
 		fixes, err := m.linkFixes(g, found, entry)
 		if err != nil {
 			return nil, err
 		}
 		acts.BrokenLinks = fixes
 		out[s.ID] = acts
+		if s.Canonical == "" && len(s.Folders) > 1 {
+			// Grouped folders outside the store have no canonical ID; inventory.Scan
+			// may pick any copy's dir: ID, so expose the same actions under each.
+			for _, p := range s.Folders {
+				if rel, ok := a.d.Paths.HomeRel(folders[p].Entry); ok {
+					out[domain.DirID(rel)] = acts
+				}
+			}
+		}
 	}
 	return out, nil
 }
 
+// isManualSkill reports whether s is a confirmed independent manual
+// installation: no recorded origin, no foreign zone, unambiguous claim, and
+// every observed folder confirmed free of .git.
+func isManualSkill(s graph.Skill, folders map[string]graph.Folder) bool {
+	if s.Origin != domain.OriginNone || s.Zone != graph.ZoneNone || len(s.SharedWith) > 0 || len(s.Folders) == 0 {
+		return false
+	}
+	for _, path := range s.Folders {
+		f, ok := folders[path]
+		if !ok || f.Git != graph.GitNone {
+			return false
+		}
+	}
+	return true
+}
+
+// providerOf returns the confirmed external provider identifier when s lies in
+// a proven foreign provider or plugin zone, or "" when ownership is unproven.
+func (a *App) providerOf(s graph.Skill, entry string) string {
+	if s.Canonical == "" {
+		return ""
+	}
+	switch s.Zone {
+	case graph.ZonePlugin:
+		return ProviderClaudePlugin
+	case graph.ZoneGentle, graph.ZoneShared:
+		return ProviderGentleAI
+	case graph.ZoneProvider:
+		rel, ok := a.d.Paths.HomeRel(entry)
+		if !ok && s.Canonical != "" {
+			rel, ok = a.d.Paths.HomeRel(s.Canonical)
+		}
+		if !ok {
+			return ""
+		}
+		switch {
+		case rel == ".claude/plugins" || strings.HasPrefix(rel, ".claude/plugins/"):
+			return ProviderClaudePlugin
+		case rel == ".claude/skills/synced" || strings.HasPrefix(rel, ".claude/skills/synced/"):
+			return ProviderClaudeSynced
+		case rel == ".cursor/skills-cursor" || strings.HasPrefix(rel, ".cursor/skills-cursor/"):
+			return ProviderCursor
+		case rel == ".codex/skills/.system" || strings.HasPrefix(rel, ".codex/skills/.system/") ||
+			rel == ".codex/plugins" || strings.HasPrefix(rel, ".codex/plugins/") ||
+			rel == ".codex/.tmp" || strings.HasPrefix(rel, ".codex/.tmp/"):
+			return ProviderCodex
+		}
+	}
+	return ""
+}
+
 // storeActions asks each planner about the store skill key on g.
-func (m *manager) storeActions(g graph.Graph, key string) SkillActions {
+func (m *manager) storeActions(g graph.Graph, key, entry string) SkillActions {
 	acts := SkillActions{Key: key}
 	_, err := m.toggle.Disable(g, key)
 	acts.Disable = err == nil
-	_, err = m.remove.Remove(key)
-	acts.Remove = err == nil
+	if _, err := m.remove.Remove(key); err == nil {
+		acts.Remove = true
+		acts.RemoveKey = key
+	} else if rel, ok := m.a.d.Paths.HomeRel(entry); ok {
+		target := domain.DirID(rel)
+		if _, err := m.remove.Remove(target); err == nil {
+			acts.Remove = true
+			acts.RemoveKey = target
+		}
+	}
 	for _, h := range g.Harnesses {
 		if _, err := m.toggle.Unlink(g, key, h); err == nil {
 			acts.Unlink = append(acts.Unlink, h)
@@ -463,12 +572,15 @@ var agentNames = sync.OnceValue(func() map[string]string {
 })
 
 // OperationView is what a version 2 journal line did, for the TUI's
-// Historial: the plan's action, the skill keys its effect touched, and
-// whether it undid that action.
+// Historial: the plan's action, the skill keys its effect touched, an optional
+// path label when no store/parked key was touched, and whether it undid that
+// action.
 type OperationView struct {
-	Action string
-	Keys   []string
-	Undo   bool
+	Action     string
+	Keys       []string
+	Label      string
+	ProjectDir string
+	Undo       bool
 }
 
 // Operation returns what the operation of the snapshot did. It only reads.
@@ -482,19 +594,44 @@ func (a *App) Operation(ctx context.Context, snapshot string) (OperationView, er
 		return OperationView{}, err
 	}
 	v := OperationView{Action: snap.Plan.Action, Keys: effectKeys(snap.Plan.Effect)}
-	if snap.Plan.Undoes == "" {
-		return v, nil
+	plan := snap.Plan
+	if snap.Plan.Undoes != "" {
+		v.Undo = true
+		orig, err := m.engine.ReadSnapshot(snap.Plan.Undoes)
+		if err != nil {
+			return OperationView{}, err
+		}
+		plan = orig.Plan
+		v.Action = orig.Plan.Action
+		if len(v.Keys) == 0 {
+			v.Keys = effectKeys(orig.Plan.Effect)
+		}
 	}
-	v.Undo = true
-	orig, err := m.engine.ReadSnapshot(snap.Plan.Undoes)
-	if err != nil {
-		return OperationView{}, err
+	if plan.HasProjectScope() {
+		v.ProjectDir = plan.Project.ProjectDir
 	}
-	v.Action = orig.Plan.Action
 	if len(v.Keys) == 0 {
-		v.Keys = effectKeys(orig.Plan.Effect)
+		v.Label = a.planPathLabel(plan)
 	}
 	return v, nil
+}
+
+// planPathLabel describes the folder a key-less operation (such as removing an
+// independent global skill) acted on, for Historial display without polluting
+// store-key activity matching.
+func (a *App) planPathLabel(p engine.Plan) string {
+	if p.HasProjectScope() {
+		return filepath.ToSlash(filepath.Join(string(p.Project.Root), p.Project.SkillName))
+	}
+	for _, s := range p.Steps {
+		if s.Kind == engine.StepRemoveTree && s.Path != "" {
+			if rel, ok := a.d.Paths.HomeRel(s.Path); ok {
+				return "~/" + rel
+			}
+			return filepath.Base(s.Path)
+		}
+	}
+	return ""
 }
 
 // effectKeys are the skill keys an effect touches, in order, without

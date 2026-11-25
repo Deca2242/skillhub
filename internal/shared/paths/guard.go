@@ -54,6 +54,18 @@ func (g Guard) Check(path string) error {
 	return nil
 }
 
+// CheckLexical checks an absolute path against the configured prefixes without
+// accessing the filesystem. Callers must separately enforce no-follow access.
+func (g Guard) CheckLexical(path string) error {
+	if !filepath.IsAbs(path) {
+		return fmt.Errorf("%w: %q is not absolute", ErrInvalidPath, path)
+	}
+	if g.matches(filepath.Clean(path)) {
+		return fmt.Errorf("%w: %s", ErrForbidden, path)
+	}
+	return nil
+}
+
 func (g Guard) matches(path string) bool {
 	for _, prefix := range g.prefixes {
 		if within(path, prefix) {

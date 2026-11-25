@@ -54,6 +54,9 @@ func foreign(p Plan, i int, seen []Image) *ForeignStateError {
 // Apply runs an approved plan: Begin, every step, the verification and the
 // close, then releases the state lock.
 func (e *Engine) Apply(ctx context.Context, p Plan) (Outcome, error) {
+	if err := p.verifyAndCheckProjectScope(e, "apply"); err != nil {
+		return Outcome{}, err
+	}
 	run, err := e.Begin(ctx, p)
 	if err != nil {
 		return Outcome{}, err
@@ -73,14 +76,18 @@ func (e *Engine) Apply(ctx context.Context, p Plan) (Outcome, error) {
 // journal the operation as failed. Foreign state stops everything: nothing is
 // touched or rolled back, and the record keeps a diagnostic for Recover.
 func (r *Run) Execute() (Outcome, error) {
+	if err := r.e.requireProjectGate(r.rec.Plan, "execute"); err != nil {
+		return Outcome{}, err
+	}
 	e := r.e
 	snap, err := e.verifiedSnapshot(r.rec)
 	if err != nil {
 		return Outcome{}, err
 	}
 	steps := r.rec.Plan.Steps
+	clones := cloneObjects(r.rec.Plan)
 	for i := r.rec.LastCompleted + 1; i < len(steps); i++ {
-		prog, seen, err := e.observe(steps[i])
+		prog, seen, err := e.observe(r.rec.Plan, steps[i], clones)
 		if err != nil {
 			return Outcome{}, r.rollback(snap, err)
 		}
@@ -202,12 +209,15 @@ func (e *Engine) verifiedSnapshot(rec Record) (Snapshot, error) {
 // empty lock is still there where the step's other image has no lock.
 const halfway Progress = "halfway"
 
-// observe tells where step s stands on disk.
-func (e *Engine) observe(s Step) (Progress, []Image, error) {
-	v := e.newView()
+// observe tells where step s stands on disk, using clones so clone-root
+// observation stays consistent across forward execution and rollback/recovery.
+func (e *Engine) observe(p Plan, s Step, clones map[string]bool) (Progress, []Image, error) {
+	v := e.newPlanView(p.Project)
+	allowStep := stepAllowsClone(s)
 	seen := make([]Image, len(s.Pre))
 	for i := range s.Pre {
-		img, err := v.image(s.Pre[i])
+		allowClone := allowStep || clones[s.Pre[i].object()]
+		img, err := v.observe(s.Pre[i], allowClone)
 		if err != nil {
 			return "", nil, err
 		}
@@ -240,7 +250,24 @@ func classify(s Step, seen []Image) Progress {
 // do runs step i of rec's plan and returns the entry it took out of the
 // lock, if any.
 func (e *Engine) do(rec Record, i int) (*domain.ParkedEntry, error) {
+	if err := e.requireProjectGate(rec.Plan, "execute step"); err != nil {
+		return nil, err
+	}
 	s := rec.Plan.Steps[i]
+	if rec.Plan.HasProjectScope() {
+		proj := *rec.Plan.Project
+		switch s.Kind {
+		case StepRemoveTree:
+			return nil, e.removeProjectTree(proj, e.trash(rec, i))
+		case StepRestoreTree:
+			if !within(s.Src, e.d.Paths.SnapshotsDir()) {
+				return nil, fmt.Errorf("%w: restore from %s, outside the snapshots", ErrInvalidStep, s.Src)
+			}
+			return nil, e.restoreProjectTree(s.Src, proj, s.Post[0].TreeSHA, e.staging(rec, i))
+		default:
+			return nil, fmt.Errorf("%w: project-scoped step %q", ErrInvalidStep, s.Kind)
+		}
+	}
 	switch s.Kind {
 	case StepMove:
 		if err := e.ensureParent(s.Dst); err != nil {
@@ -251,13 +278,18 @@ func (e *Engine) do(rec Record, i int) (*domain.ParkedEntry, error) {
 		return nil, e.d.Links.Symlink(s.Target, s.Path)
 	case StepUnlink:
 		return nil, e.d.Links.RemoveLink(s.Path, s.Target)
-	case StepRemoveTree:
+	case StepRemoveTree, StepRemoveClone:
 		return nil, e.removeTree(s.Path, e.trash(rec, i))
 	case StepRestoreTree:
 		if !within(s.Src, e.d.Paths.SnapshotsDir()) {
 			return nil, fmt.Errorf("%w: restore from %s, outside the snapshots", ErrInvalidStep, s.Src)
 		}
 		return nil, e.publish(s.Src, s.Path, s.Post[0].TreeSHA, e.staging(rec, i))
+	case StepRestoreClone:
+		if !within(s.Src, e.d.Paths.SnapshotsDir()) {
+			return nil, fmt.Errorf("%w: restore from %s, outside the snapshots", ErrInvalidStep, s.Src)
+		}
+		return nil, e.publishClone(s.Src, s.Path, s.Post[0].CloneSHA, e.staging(rec, i))
 	case StepRequire:
 		return nil, nil // checked before the step, and again by verify
 	case StepLockPark:
@@ -325,6 +357,57 @@ func (e *Engine) trash(rec Record, i int) string {
 	return filepath.Join(e.trashRoot(), rec.SnapshotID+"-"+strconv.Itoa(i))
 }
 
+// ensureProjectScratchBase ensures the parent directory above ~/.agents/.skillhub
+// exists when a clean home has never used ~/.agents yet.
+func (e *Engine) ensureProjectScratchBase() error {
+	parent := filepath.Dir(filepath.Dir(e.d.Paths.ParkedDir()))
+	if _, err := e.d.Files.Mode(parent); errors.Is(err, fs.ErrNotExist) {
+		return e.d.Files.MkdirAll(parent, 0o755)
+	} else if err != nil {
+		return fmt.Errorf("look at %s: %w", parent, err)
+	}
+	return nil
+}
+
+func (e *Engine) removeProjectTree(scope ProjectScope, trash string) error {
+	if err := e.ensureProjectScratchBase(); err != nil {
+		return err
+	}
+	if err := e.ensureParent(trash); err != nil {
+		return err
+	}
+	if err := e.removeOwn(trash); err != nil {
+		return err
+	}
+	if err := e.d.ProjectFS.RemoveSkillToTrash(scope.ProjectDir, string(scope.Root), scope.SkillName, trash); err != nil {
+		return err
+	}
+	return e.removeOwn(trash)
+}
+
+func (e *Engine) restoreProjectTree(copyDir string, scope ProjectScope, sha, staging string) error {
+	if err := e.ensureProjectScratchBase(); err != nil {
+		return err
+	}
+	if err := e.ensureParent(staging); err != nil {
+		return err
+	}
+	if err := e.removeOwn(staging); err != nil {
+		return err
+	}
+	if err := e.d.Files.CopyTree(copyDir, staging); err != nil {
+		return fmt.Errorf("copy %s next to %s: %w", copyDir, staging, err)
+	}
+	err := e.verifyCopy(copyDir, staging, sha)
+	if err == nil {
+		err = e.d.ProjectFS.RestoreSkillFromStaging(staging, scope.ProjectDir, string(scope.Root), scope.SkillName)
+	}
+	if err != nil {
+		return errors.Join(err, e.removeOwn(staging))
+	}
+	return nil
+}
+
 // removeTree moves the folder at path to trash with a rename that never
 // replaces, then deletes it there.
 func (e *Engine) removeTree(path, trash string) error {
@@ -388,6 +471,20 @@ func (e *Engine) makeWritable(dir string) error {
 	}
 	if err := e.d.Files.Chmod(dir, mode.Perm()|0o700); err != nil {
 		return err
+	}
+	if dr, ok := e.d.Files.(DirReader); ok {
+		entries, err := dr.ReadDir(dir)
+		if err != nil {
+			return err
+		}
+		for _, en := range entries {
+			if en.Type().IsDir() {
+				if err := e.makeWritable(filepath.Join(dir, en.Name())); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
 	}
 	entries, err := e.d.Dirs.Scan(dir)
 	if err != nil {
@@ -509,6 +606,32 @@ func (e *Engine) publish(copyDir, path, sha, staging string) error {
 	return nil
 }
 
+// publishClone puts a verified whole-clone copy of copyDir at path, which must
+// not exist: the copy is staged outside every harness, verified with
+// verifyCloneCopy against cloneSHA, and then published via RenameNoReplace.
+func (e *Engine) publishClone(copyDir, path, cloneSHA, staging string) error {
+	if err := e.ensureParent(staging); err != nil {
+		return err
+	}
+	if err := e.ensureParent(path); err != nil {
+		return err
+	}
+	if err := e.removeOwn(staging); err != nil {
+		return err
+	}
+	if err := e.d.Files.CopyTree(copyDir, staging); err != nil {
+		return fmt.Errorf("copy %s next to %s: %w", copyDir, path, err)
+	}
+	err := e.verifyCloneCopy(copyDir, staging, cloneSHA)
+	if err == nil {
+		err = e.d.Links.RenameNoReplace(staging, path)
+	}
+	if err != nil {
+		return errors.Join(err, e.removeOwn(staging))
+	}
+	return nil
+}
+
 // finalImages is, for every object the plan touches, the image its last
 // step leaves, in the order the plan first touches them.
 func finalImages(p Plan) []Image {
@@ -529,12 +652,16 @@ func finalImages(p Plan) []Image {
 	return out
 }
 
-// verify checks that every object is the plan's postimage: tree hashes, link
-// targets, entry bytes and the lock's absence.
+// verify checks that every object is the plan's postimage: tree hashes, clone
+// digests, link targets, entry bytes and the lock's absence.
 func (e *Engine) verify(p Plan) error {
-	v := e.newView()
+	if err := e.requireProjectGate(p, "verify"); err != nil {
+		return err
+	}
+	v := e.newPlanView(p.Project)
+	clones := cloneObjects(p)
 	for _, want := range finalImages(p) {
-		got, err := v.image(want)
+		got, err := v.observe(want, clones[want.object()])
 		if err != nil {
 			return fmt.Errorf("%w: %w", ErrVerify, err)
 		}

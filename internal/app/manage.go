@@ -78,6 +78,7 @@ func (a *App) v2(ctx context.Context) (*manager, error) {
 		Paths: a.d.Paths, Files: a.d.Files, Links: a.d.Links,
 		Lock: a.d.ManagedLock, DropLock: a.d.ManagedLock,
 		State: a.d.State, Dirs: a.d.Dirs, Clock: a.d.Clock, HashDir: a.d.HashDir,
+		ProjectDir: a.projectDir, ProjectFS: a.d.Project,
 	})
 	m.toggle = toggle.New(toggle.Deps{
 		Paths: a.d.Paths, Harnesses: harnesses, Profiles: profiles,
@@ -85,8 +86,9 @@ func (a *App) v2(ctx context.Context) (*manager, error) {
 	})
 	m.remove = remove.New(remove.Deps{
 		Paths: a.d.Paths, Planner: m.engine, Lock: a.d.ManagedLock, State: a.d.State,
-		Observe: m.observe, Profiles: profiles,
+		Observe: m.observe, Harnesses: harnesses, Profiles: profiles,
 		Dirs: a.d.Dirs, Links: a.d.Links, Files: a.d.Files, HashDir: a.d.HashDir,
+		ProjectDir: a.projectDir, Project: a.d.Project,
 	})
 	m.repair = repair.New(repair.Deps{
 		Paths: a.d.Paths, Harnesses: harnesses, Profiles: profiles,

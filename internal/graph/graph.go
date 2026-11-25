@@ -156,6 +156,23 @@ type Boundary struct {
 	Zone Zone
 }
 
+// GitEvidence describes whether a skill folder has .git metadata at or
+// around it, or whether Git observation was incomplete.
+type GitEvidence uint8
+
+const (
+	// GitUnknown means Git evidence was not completely observed.
+	GitUnknown GitEvidence = iota
+	// GitNone means every observed path, resolved folder, relevant ancestor
+	// (including configured roots), and bounded nested directory was observed
+	// free of .git.
+	GitNone
+	// GitPresent means .git evidence (directory, marker file, or symlink) was
+	// observed at the folder, an observed path, a relevant ancestor, or nested
+	// inside the folder.
+	GitPresent
+)
+
 // Folder is a physical skill folder, however many entries reach it.
 type Folder struct {
 	// Path is the folder with every link resolved.
@@ -170,6 +187,8 @@ type Folder struct {
 	// Entries are every listed path that reaches it.
 	Entries   []string
 	Sightings []Sighting
+	// Git reports whether .git evidence was observed at, above, or inside the folder.
+	Git GitEvidence
 }
 
 // Skill is a node of the graph.
@@ -244,6 +263,8 @@ type builder struct {
 	links      map[string]*Link
 	boundary   map[string]Zone
 	zoneByPath map[string]Zone
+	gitHints   map[string]bool
+	gitDirs    map[string]GitEvidence
 	// realDirs caches the real path of each directory resolved, the known
 	// roots among them.
 	realDirs map[string]string
@@ -261,6 +282,7 @@ func Build(d Deps) (Graph, error) {
 		d: d, ro: readOnly{d.Files}, store: d.Paths.StoreDir(),
 		walks: map[string][]observed{}, folders: map[string]*Folder{}, links: map[string]*Link{}, realDirs: map[string]string{},
 		boundary: map[string]Zone{}, zoneByPath: map[string]Zone{},
+		gitHints: map[string]bool{}, gitDirs: map[string]GitEvidence{},
 	}
 	var err error
 	if b.gentle, err = inventory.GentleManagesSkills(b.ro, d.Paths.GentleAIStateFile()); err != nil {
@@ -282,6 +304,7 @@ func Build(d Deps) (Graph, error) {
 		return Graph{}, err
 	}
 	for _, f := range b.folders {
+		f.Git = b.folderGit(f)
 		g.Folders = append(g.Folders, *f)
 	}
 	slices.SortFunc(g.Folders, func(x, y Folder) int { return cmp.Compare(x.Path, y.Path) })
@@ -454,6 +477,9 @@ func (b *builder) zone(dir, name string) (Zone, error) {
 
 // observe records a skill folder entry of root.
 func (b *builder) observe(root string, e ports.DirEntry, level int, kind rawKind, lexical string) error {
+	if e.HasGit {
+		b.gitHints[e.ResolvedPath] = true
+	}
 	f, ok := b.folders[e.ResolvedPath]
 	if !ok {
 		if err := b.d.Paths.Check(e.ResolvedPath); err != nil {
@@ -831,6 +857,9 @@ func (b *builder) cloneFolder(path string) (string, Zone, error) {
 		return "", ZoneNone, nil
 	}
 	resolved := entries[i].ResolvedPath
+	if entries[i].HasGit {
+		b.gitHints[resolved] = true
+	}
 	if _, ok := b.folders[resolved]; !ok {
 		tree, err := b.d.HashDir(resolved)
 		if err != nil {
@@ -840,7 +869,13 @@ func (b *builder) cloneFolder(path string) (string, Zone, error) {
 		if err != nil {
 			return "", ZoneNone, err
 		}
-		b.folders[resolved] = &Folder{Path: resolved, Entry: path, Name: fm.Name, TreeSHA: tree.SHA, Entries: []string{path}}
+		b.folders[resolved] = &Folder{
+			Path:    resolved,
+			Entry:   path,
+			Name:    fm.Name,
+			TreeSHA: tree.SHA,
+			Entries: []string{path},
+		}
 	}
 	if inventory.Excluded(b.d.Paths, path) {
 		return resolved, ZoneProvider, nil
@@ -886,6 +921,133 @@ func (b *builder) finish(s *Skill, byCanonical map[string][]string) {
 	slices.SortFunc(s.Visibility, func(x, y Sighting) int {
 		return cmp.Or(cmp.Compare(x.Harness, y.Harness), cmp.Compare(x.Entry, y.Entry))
 	})
+}
+
+// folderGit evaluates .git evidence across f's observed entries, resolved
+// folder, relevant ancestors (including configured roots), and bounded nested
+// subdirectories, failing closed to GitUnknown when observation is incomplete.
+func (b *builder) folderGit(f *Folder) GitEvidence {
+	if b.gitHints[f.Path] {
+		return GitPresent
+	}
+	incomplete := f.Path == "" || (f.Entry == "" && len(f.Entries) == 0)
+
+	seen := map[string]bool{}
+	candidates := make([]string, 0, len(f.Entries)+2)
+	addCandidate := func(p string) {
+		if p == "" {
+			return
+		}
+		clean := filepath.Clean(p)
+		if !seen[clean] {
+			seen[clean] = true
+			candidates = append(candidates, clean)
+		}
+	}
+	addCandidate(f.Path)
+	addCandidate(f.Entry)
+	for _, e := range f.Entries {
+		addCandidate(e)
+	}
+
+	for _, p := range candidates {
+		switch b.ancestorsGit(p) {
+		case GitPresent:
+			return GitPresent
+		case GitUnknown:
+			incomplete = true
+		}
+	}
+
+	if f.Path != "" {
+		switch b.nestedGit(f.Path, 0) {
+		case GitPresent:
+			return GitPresent
+		case GitUnknown:
+			incomplete = true
+		}
+	}
+
+	if incomplete {
+		return GitUnknown
+	}
+	return GitNone
+}
+
+func (b *builder) ancestorsGit(p string) GitEvidence {
+	home := b.d.Paths.Home()
+	if !within(p, home) || p == home {
+		if b.dirHasGit(p) == GitPresent {
+			return GitPresent
+		}
+		return GitUnknown
+	}
+	incomplete := false
+	for cur := p; within(cur, home) && cur != home; cur = filepath.Dir(cur) {
+		switch b.dirHasGit(cur) {
+		case GitPresent:
+			return GitPresent
+		case GitUnknown:
+			incomplete = true
+		}
+		if r, ok := b.realDirs[cur]; ok && r != "" && r != cur {
+			switch b.dirHasGit(r) {
+			case GitPresent:
+				return GitPresent
+			case GitUnknown:
+				incomplete = true
+			}
+		}
+	}
+	if incomplete {
+		return GitUnknown
+	}
+	return GitNone
+}
+
+func (b *builder) dirHasGit(dir string) GitEvidence {
+	if v, ok := b.gitDirs[dir]; ok {
+		return v
+	}
+	exists, err := b.d.Files.Exists(filepath.Join(dir, ".git"))
+	if err != nil {
+		b.gitDirs[dir] = GitUnknown
+		return GitUnknown
+	}
+	v := GitNone
+	if exists {
+		v = GitPresent
+	}
+	b.gitDirs[dir] = v
+	return v
+}
+
+func (b *builder) nestedGit(dir string, depth int) GitEvidence {
+	if depth >= maxWalk {
+		return GitUnknown
+	}
+	entries, err := b.d.Dirs.Scan(dir)
+	if err != nil {
+		return GitUnknown
+	}
+	incomplete := false
+	for _, e := range entries {
+		if e.Name == ".git" || e.HasGit {
+			return GitPresent
+		}
+		if e.Kind == ports.EntryDir {
+			switch b.nestedGit(e.Path, depth+1) {
+			case GitPresent:
+				return GitPresent
+			case GitUnknown:
+				incomplete = true
+			}
+		}
+	}
+	if incomplete {
+		return GitUnknown
+	}
+	return GitNone
 }
 
 // errReadOnly is what readOnly answers to any write.

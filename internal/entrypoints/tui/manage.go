@@ -367,10 +367,27 @@ func (m *Model) handleManageSkillsKey(k string) (tea.Cmd, bool) {
 		return nil, true
 	}
 	row, ok := m.selectedRow()
-	if !ok || row.ParkedKey != "" {
+	if !ok {
 		return nil, true
 	}
-	if row.Ignored {
+	if row.ParkedKey != "" {
+		if k == "e" {
+			return m.startPlan(app.Request{Action: app.ActionRemove, Key: parkedIDPrefix + row.ParkedKey}), true
+		}
+		return nil, true
+	}
+	if row.Project != nil {
+		if k == "e" {
+			if row.Project.Removable {
+				return m.startPlan(app.Request{Action: app.ActionRemove, Key: row.Project.ID}), true
+			}
+			m.status = projectNonRemovableReason(*row.Project)
+			return nil, true
+		}
+		m.status = "En el proyecto actual solo puedes eliminar carpetas reales independientes con [e]."
+		return nil, true
+	}
+	if row.Ignored && k != "e" {
 		m.status = text.TUIIgnoredRow(text.SafeLine(row.RawName))
 		return nil, true
 	}
@@ -380,14 +397,18 @@ func (m *Model) handleManageSkillsKey(k string) (tea.Cmd, bool) {
 	}
 	acts := m.actions[row.ID]
 	if !m.offers(row, k) {
-		m.status = notOffered(k, acts, m.actions != nil)
+		if row.Ignored {
+			m.status = text.TUIIgnoredRow(text.SafeLine(row.RawName))
+		} else {
+			m.status = notOffered(k, acts, m.actions != nil)
+		}
 		return nil, true
 	}
 	switch k {
 	case "d":
 		return m.startPlan(app.Request{Action: app.ActionDisable, Key: acts.Key}), true
 	case "e":
-		return m.startPlan(app.Request{Action: app.ActionRemove, Key: acts.Key}), true
+		return m.startPlan(app.Request{Action: app.ActionRemove, Key: removeTarget(acts)}), true
 	case "o":
 		return m.startPlan(app.Request{Action: app.ActionAdoptOff}), true
 	case "p":
@@ -397,6 +418,13 @@ func (m *Model) handleManageSkillsKey(k string) (tea.Cmd, bool) {
 		return m.openChecks(acts.Key), true
 	}
 	return nil, true
+}
+
+func removeTarget(acts app.SkillActions) string {
+	if acts.RemoveKey != "" {
+		return acts.RemoveKey
+	}
+	return acts.Key
 }
 
 // keyActions are the store actions of the Skills screen's keys.
@@ -421,6 +449,8 @@ func notOffered(k string, acts app.SkillActions, known bool) string {
 	}
 	action := keyActions[k]
 	switch {
+	case k == "e":
+		return text.TUICannotNow(action)
 	case acts.Off:
 		return text.TUIOffOnly(action)
 	case known && acts.Key == "":

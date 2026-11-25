@@ -29,12 +29,12 @@ skillhub   1 Skills (17)  2 Actualizar  3 Instalar  4 Salud (26)   h historial �
 │ Skills (17)                          ││ accessibility                                            │
 │ ⚠ accessibility          enlace roto ││ La desactivaste a mano moviéndola a OFF/, pero Codex,    │
 │ ● agent-browser          sin revisar ││ OpenCode y Pi la siguen viendo porque buscan en          │
-│ ⚠ brainstorming        sin gestionar ││ subcarpetas.                                             │
+│ ⚠ brainstorming               manual ││ subcarpetas.                                             │
 │ ⚠ computer-use            modificada ││ Recomendado: [o] Desactivarla de verdad                  │
 │ ⚠ domain-driven-design   enlace roto ││                                                          │
 │ ● grill-me               sin revisar ││ Disponible en: Codex, OpenCode y Pi                      │
 │ ● grill-with-docs        sin revisar ││ Origen: owner/accessibility                              │
-│ ⚠ humanizer            sin gestionar ││ Tiene un enlace que no lleva a ninguna parte.            │
+│ ⚠ humanizer                   manual ││ Tiene un enlace que no lleva a ninguna parte.            │
 ╰──────────────────────────────────────╯╰──────────────────────────────────────────────────────────╯
 o desactivarla de verdad • enter ver todo • x ignorar • / buscar • f filtrar • g ver por agente • ?
 ayuda • q salir
@@ -117,7 +117,7 @@ se explica [más abajo](#si-un-agente-guarda-sus-skills-en-otro-lugar).
 
 **Qué deja fuera.** Las skills que trae o gestiona otra herramienta (los plugins de Claude Code, las
 carpetas propias de algunos agentes, como Cursor y Codex, y las copias que gestiona gentle-ai), las de
-nivel de proyecto (por ejemplo, `.agents/skills` dentro de un repositorio) y lo que pongas en la lista
+nivel de proyecto (salvo para eliminar copias independientes del proyecto actual, como se detalla más abajo) y lo que pongas en la lista
 `ignore` de los [ajustes](#ajustes).
 
 **De dónde viene cada skill.** skillhub reconoce tres orígenes, y solo los dos primeros reciben
@@ -203,7 +203,8 @@ lo que va a cambiar; en la ayuda y en la salida se llama *snapshot*. Con ella se
 - **Una operación de gestión** (instalar, eliminar, activar, desactivar, enlazar, quitar un enlace o
   reparar): al terminar, cada una dice cómo deshacerla, por ejemplo
   `skillhub undo v2:disable --to <snapshot>`. Ese deshacer muestra su plan, se aprueba igual que la
-  operación y se niega si algo cambió después. Un deshacer no se puede deshacer.
+  operación y se niega si algo cambió después (y en una skill de proyecto, exige volver a abrir skillhub
+  desde ese mismo proyecto). Un deshacer no se puede deshacer.
 
 `skillhub history` lista lo que se aplicó, deshizo, omitió o recuperó. En la interfaz, `z` deshace lo
 último que hiciste en la sesión y, en el Historial (`h`), `u` deshace la operación elegida.
@@ -260,7 +261,7 @@ skillhub background disable [--dry-run]     la desactiva y borra sus unidades de
 
 skillhub skills show <skill> [--json]                  estado, agentes que la ven, origen y actividad
 skillhub skills install <origen> [--to <harness>...]   instala desde GitHub o un sitio web tras revisarla
-skillhub skills remove <skill>                         elimina una skill, activa o desactivada
+skillhub skills remove <skill>                         elimina una skill independiente (global o del proyecto actual)
 skillhub skills disable <skill>                        la desactiva en todos sus destinos gestionados
 skillhub skills enable <skill>                         la activa con los enlaces que tenía
 skillhub skills link <skill> --to <harness>            la enlaza en un agente
@@ -280,9 +281,12 @@ comas.
 
 ### Cómo se indica una skill
 
-`<skill>` es el nombre de la skill o su `id`: `lock:<nombre>`, `git:<ruta>` o `dir:<ruta>`, con la ruta
-relativa al home. Si un nombre corresponde a más de una skill, el comando se niega y lista los `id`:
-vuelve a ejecutarlo con el `id` que quieras.
+`<skill>` es el nombre de la skill o su `id`: `lock:<nombre>`, `parked:<clave>`, `git:<ruta>` o
+`dir:<ruta>`, con la ruta relativa al home. Si un nombre corresponde a más de una skill, el comando se
+niega y lista los `id`: vuelve a ejecutarlo con el `id` que quieras. En `skills remove` puedes indicar la
+clave del almacén o el identificador exacto (`dir:<ruta>`, `lock:<nombre>`, `parked:<clave>`,
+`project:.agents/skills/<nombre>` o `project:.claude/skills/<nombre>`); ante cualquier ambigüedad se niega
+en lugar de eliminar varias copias por nombre.
 
 ### Salida JSON de `skills show`
 
@@ -393,10 +397,19 @@ destino que no lee el almacén directamente la ve por un enlace simbólico.
 - **Activar con una vecina desactivada.** Las entradas del lock vuelven a su posición en el orden
   inverso al que salieron. Si una vecina sigue desactivada, `enable` se niega y nombra la skill que hay
   que activar primero.
-- **Eliminar** deja todo en una copia de respaldo. Si la eliminación se completó pero falló marcar como
-  reemplazadas sus actualizaciones pendientes, se informa como un éxito con un aviso. Eliminar una skill
-  desactivada sin carpeta (una entrada guardada aparte con la reparación `park_entry`) descarta solo su
-  registro; el plan lo indica con «Sin carpeta».
+- **Eliminar** deja todo en una copia de respaldo reversible con `undo`. Acepta una skill global del
+  almacén (activa o desactivada), una carpeta global independiente en el directorio de skills de un
+  agente configurado o desactivada a mano en `~/.agents/skills/OFF/`, o una carpeta real directa en
+  `.agents/skills` o `.claude/skills` del proyecto desde el que abriste skillhub, seleccionándola por su
+  identificador exacto (`dir:<ruta>`, `lock:<nombre>`, `parked:<clave>`, `project:.agents/skills/<nombre>`
+  o `project:.claude/skills/<nombre>`). La confirmación muestra las rutas exactas, quita solo los enlaces
+  propios seguros y la carpeta elegida, y no altera entradas del lock, homónimos globales ni copias de
+  otros ámbitos. Rechaza rutas arbitrarias, raíces o copias enlazadas simbólicamente, otros proyectos
+  (superiores o vecinos), copias de proveedores o perfiles, y clones de git (o carpetas con `.git`). Para
+  deshacer o recuperar una operación de proyecto, debes volver a abrir skillhub en ese mismo proyecto. Si
+  la eliminación se completó pero falló marcar como reemplazadas sus actualizaciones pendientes, se informa
+  como un éxito con un aviso. Eliminar una skill desactivada sin carpeta (una entrada guardada aparte con
+  la reparación `park_entry`) descarta solo su registro; el plan lo indica con «Sin carpeta».
 - **Doctor** solo lee. `doctor fix` aplica la única reparación que admite el hallazgo; si admite varias,
   las lista y pide que elijas una con `--repair`, y si no admite ninguna, explica por qué (por ejemplo,
   las copias de gentle-ai solo se informan). `<hallazgo>` es el identificador que muestra `skillhub doctor`. Para unir copias que
@@ -444,10 +457,16 @@ destino que no lee el almacén directamente la ve por un enlace simbólico.
   (`●` activa, `↑` con una actualización, `○` desactivada, `⚠` con problemas, `-` ignorada); a la
   derecha, el panel de la skill: primero su situación y el paso recomendado, después su descripción, los
   agentes que la ven de verdad, su origen y las acciones que admite. El panel solo ofrece acciones que la
-  app puede planificar para esa fila. `/` busca, `f` filtra por estado (todas, activas, desactivadas, con
+  app puede planificar para esa fila; las skills gestionadas por un proveedor o plugin (como un plugin de
+  Claude Code o `gentle-ai`) indican quién las gestiona y a qué superficie o documentación acudir, sin
+  ofrecer acciones que skillhub no pueda verificar. `/` busca,
+  `f` filtra por estado (todas, activas, desactivadas, con
   problemas, con actualización, ignoradas) y `g` muestra solo lo que ve un agente («Qué ve Claude
   Code»). Por debajo de 100 columnas, el panel va debajo de la lista.
-- **Teclas de Skills:** `d` desactivar, `a` activar, `e` eliminar, `l` elegir en qué agentes está
+- **Teclas de Skills:** `d` desactivar, `a` activar, `e` eliminar (disponible para skills del almacén,
+  desactivadas, en `OFF/`, carpetas globales independientes de un agente que no sean clones de git,
+  carpetas reales directas en `.agents/skills` o `.claude/skills` del proyecto actual y filas del filtro
+  «ignoradas», manteniendo la lista `ignore` en `settings.toml`), `l` elegir en qué agentes está
   (casillas: espacio marca, `enter` confirma; cada enlace que cambia es un plan con su propia
   confirmación), `o` desactivarla de verdad (una skill apagada a mano en `OFF/` que algunos agentes
   siguen viendo: adopta todas las de `OFF/` en un solo plan y las nombra), `p` arreglar su enlace roto

@@ -75,6 +75,10 @@ var (
 	ErrLockUnsupported    = errors.New("the skills lock has a version skillhub does not write")
 	ErrLockMalformed      = errors.New("the skills lock is malformed")
 	ErrStagingFailed      = errors.New("the install staging could not be read or emptied")
+	ErrNoProject          = errors.New("no active project directory")
+	ErrProjectLinked      = errors.New("project root or skill directory is a symlink")
+	ErrWrongProject       = errors.New("project operation belongs to another project")
+	ErrCrossDevice        = errors.New("source and destination are on different file systems")
 )
 
 // ErrCandidatesNotSuperseded is the warning of a remove that ran but could
@@ -144,6 +148,10 @@ var refusals = []struct {
 	{ErrNotAuthenticated, []error{ports.ErrNotAuthenticated}},
 	{ErrLockUnsupported, []error{ports.ErrUnsupportedLockVersion}},
 	{ErrLockMalformed, []error{ports.ErrMalformedLock}},
+	{ErrNoProject, []error{remove.ErrNoProject}},
+	{ErrProjectLinked, []error{remove.ErrProjectLinked}},
+	{ErrWrongProject, []error{engine.ErrWrongProject}},
+	{ErrCrossDevice, []error{ports.ErrCrossDevice}},
 }
 
 // RefusalError is a refusal of a version 2 operation. Kind is one of the
@@ -206,6 +214,10 @@ func related(err error) []string {
 			}
 		}
 		return out
+	}
+	var wpe *engine.WrongProjectError
+	if errors.As(err, &wpe) && wpe.OpProjectDir != "" {
+		return []string{wpe.OpProjectDir}
 	}
 	return nil
 }

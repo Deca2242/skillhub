@@ -151,11 +151,16 @@ func TestSkillActionsAreWhatThePlannersPlan(t *testing.T) {
 		if key == "" {
 			key = s.Name
 		}
+		removeKey := acts.RemoveKey
+		if removeKey == "" {
+			removeKey = key
+		}
 		for _, a := range []struct {
 			action  app.Action
+			key     string
 			offered bool
-		}{{app.ActionDisable, acts.Disable}, {app.ActionRemove, acts.Remove}} {
-			if ok := plans(app.Request{Action: a.action, Key: key}); ok != a.offered {
+		}{{app.ActionDisable, key, acts.Disable}, {app.ActionRemove, removeKey, acts.Remove}} {
+			if ok := plans(app.Request{Action: a.action, Key: a.key}); ok != a.offered {
 				t.Errorf("%s: %s offered = %v, but planning it succeeds = %v", s.ID, a.action, a.offered, ok)
 			}
 		}
@@ -182,16 +187,19 @@ func TestSkillActionsAreWhatThePlannersPlan(t *testing.T) {
 }
 
 // The user's case (L83): a skill in OFF/ that Codex, OpenCode and Pi still
-// see, with broken links in Kiro and others. Disabling and removing do not
-// apply; adopting OFF/ does, for the four skills in it, and Doctor's repair
-// of its broken links is that same adoption.
+// see, with broken links in Kiro and others. Store actions do not apply;
+// adopting OFF/ and reversible removal of the exact OFF/ folder do, and
+// Doctor's repair of its broken links is that same adoption.
 func TestSkillActionsOfAnOFFSkill(t *testing.T) {
 	m := newMachine(t)
 	got, err := m.app.SkillActions(bg)
 	must(t, err)
 	acts := got["lock:git-guardrails-claude-code"]
-	if acts.Key != "" || acts.Disable || acts.Remove || len(acts.Unlink) > 0 || acts.LinkIn != "" {
+	if acts.Key != "" || acts.Disable || len(acts.Unlink) > 0 || acts.LinkIn != "" {
 		t.Errorf("OFF skill actions = %+v, want no store action", acts)
+	}
+	if !acts.Remove || acts.RemoveKey != "dir:.agents/skills/OFF/git-guardrails-claude-code" {
+		t.Errorf("OFF skill remove = (%v, %q), want (true, %q)", acts.Remove, acts.RemoveKey, "dir:.agents/skills/OFF/git-guardrails-claude-code")
 	}
 	want := slices.Sorted(slices.Values(graphtest.OffSkills))
 	if !acts.Off || acts.OffKey != "git-guardrails-claude-code" || !slices.Equal(acts.OffKeys, want) {

@@ -116,6 +116,10 @@ var refusalKinds = map[string]error{
 	"ErrUnsafeWebFile":      app.ErrUnsafeWebFile,
 	"ErrWebDigestMismatch":  app.ErrWebDigestMismatch,
 	"ErrWebArchive":         app.ErrWebArchive,
+	"ErrNoProject":          app.ErrNoProject,
+	"ErrProjectLinked":      app.ErrProjectLinked,
+	"ErrWrongProject":       app.ErrWrongProject,
+	"ErrCrossDevice":        app.ErrCrossDevice,
 }
 
 // cliWords are what only the CLI user can act on: a skillhub command, a

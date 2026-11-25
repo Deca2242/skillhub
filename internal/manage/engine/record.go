@@ -82,6 +82,9 @@ func (e *Engine) PendingRecord() (Record, bool, error) {
 	if err != nil {
 		return Record{}, false, fmt.Errorf("operation record %s: %w", e.recordPath(), err)
 	}
+	if rec.Plan.HasProjectScope() && e.d.ProjectFS == nil {
+		return Record{}, false, fmt.Errorf("operation record %s: %w: %w", e.recordPath(), ErrUnsupportedRecord, ErrProjectScopeUnsupported)
+	}
 	return rec, true, nil
 }
 
@@ -138,6 +141,9 @@ type Run struct {
 // lock is released and nothing is left: no record, and no snapshot unless
 // removing it failed too, which Orphans reports.
 func (e *Engine) Begin(ctx context.Context, p Plan) (*Run, error) {
+	if err := p.verifyAndCheckProjectScope(e, "begin"); err != nil {
+		return nil, err
+	}
 	release, err := e.d.State.Lock(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("take the state lock: %w", err)
@@ -151,6 +157,9 @@ func (e *Engine) Begin(ctx context.Context, p Plan) (*Run, error) {
 }
 
 func (e *Engine) begin(p Plan) (*Run, error) {
+	if err := p.verifyAndCheckProjectScope(e, "begin"); err != nil {
+		return nil, err
+	}
 	if _, pending, err := e.d.State.Operation(); err != nil {
 		return nil, fmt.Errorf("read the version 1 operation: %w", err)
 	} else if pending {
@@ -180,7 +189,7 @@ func (e *Engine) begin(p Plan) (*Run, error) {
 		if existsErr != nil || exists {
 			return nil, errors.Join(err, existsErr)
 		}
-		return nil, errors.Join(err, e.d.Files.RemoveTree(e.SnapshotDir(snap.SnapshotID)))
+		return nil, errors.Join(err, e.removeOwn(e.SnapshotDir(snap.SnapshotID)))
 	}
 	return &Run{e: e, rec: rec}, nil
 }

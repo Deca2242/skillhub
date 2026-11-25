@@ -143,11 +143,13 @@ func (e *env) observe() (graph.Graph, error) {
 
 func (e *env) remover() *remove.Remover {
 	e.t.Helper()
+	harnesses, err := data.LoadHarnesses(e.h.Paths(), e.files)
+	must(e.t, err)
 	profiles, err := data.DiagnosticProfiles()
 	must(e.t, err)
 	return remove.New(remove.Deps{
 		Paths: e.h.Paths(), Planner: e.eng, Lock: e.lock, State: e.state,
-		Observe: e.observe, Profiles: profiles, Files: e.files,
+		Observe: e.observe, Harnesses: harnesses, Profiles: profiles, Files: e.files,
 		Dirs: fsadapter.NewScanner(e.h.Paths().Guard()), Links: osLinks{},
 	})
 }

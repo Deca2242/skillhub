@@ -61,6 +61,7 @@ type dataLoadedMsg struct {
 	// offers recover, as for an interrupted operation of version 1.
 	managedPending bool
 	parked         []app.ParkedSkill
+	projectSkills  []app.ProjectSkillView
 	visibility     map[string][]string
 	sightings      map[string][]app.Sighting
 	skills         []domain.Skill
@@ -142,9 +143,10 @@ type Model struct {
 	skills []domain.Skill
 	// parked are the disabled skills, listed after skills on the Skills
 	// screen so that A enables one from its row.
-	parked      []app.ParkedSkill
-	skillRows   []SkillRow
-	skillsTable table.Model
+	parked        []app.ParkedSkill
+	projectSkills []app.ProjectSkillView
+	skillRows     []SkillRow
+	skillsTable   table.Model
 	// visibility names, per skill ID, the harnesses that see it; nil when
 	// the app could not tell, and the panel falls back to the locations.
 	visibility map[string][]string
@@ -167,6 +169,7 @@ type Model struct {
 	details       bool
 	filterInput   textinput.Model
 	selectedSk    domain.Skill
+	selectedProj  *app.ProjectSkillView
 	docView       app.SkillDocument
 	docScroll     int
 	docReturnMode viewMode
@@ -390,6 +393,7 @@ func (m *Model) handleDataLoaded(msg dataLoadedMsg) *Model {
 	m.skills = msg.skills
 	m.ignored = msg.ignored
 	m.parked = msg.parked
+	m.projectSkills = msg.projectSkills
 	m.visibility = msg.visibility
 	m.sightings = msg.sightings
 	m.candidates = msg.candidates
@@ -542,6 +546,13 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case modeEditInterval:
 		return m.handleEditIntervalKey(msg)
 	case modeSkillDetail:
+		if m.selectedProj != nil {
+			if k == "esc" || k == "enter" || k == "q" {
+				m.selectedProj = nil
+				m.mode = modeNormal
+			}
+			return m, nil
+		}
 		if k == keySkillDocument {
 			return m.openSkillDocument(m.selectedSk, modeSkillDetail)
 		}
@@ -788,18 +799,31 @@ func (m *Model) handleSkillsKey(k string, msg tea.KeyPressMsg) (tea.Model, tea.C
 		m.openAgentFilter()
 		return m, nil
 	case "enter":
+		if row, ok := m.selectedRow(); ok && row.Project != nil {
+			cp := *row.Project
+			m.selectedProj = &cp
+			m.mode = modeSkillDetail
+			return m, nil
+		}
 		if sk, ok := m.selectedSkill(); ok {
+			m.selectedProj = nil
 			m.selectedSk = sk
 			m.mode = modeSkillDetail
 		}
 		return m, nil
 	case keySkillDocument:
+		if row, ok := m.selectedRow(); ok && row.Project != nil {
+			return m, nil
+		}
 		if sk, ok := m.selectedSkill(); ok {
 			m.selectedSk = sk
 			return m.openSkillDocument(sk, modeNormal)
 		}
 		return m, nil
 	case "x":
+		if row, ok := m.selectedRow(); ok && row.Project != nil {
+			return m, nil
+		}
 		if row, ok := m.selectedRow(); ok && row.Ignored && !m.busy {
 			return m, m.unignoreSkill(row.ID)
 		}
@@ -944,6 +968,10 @@ func (m *Model) View() tea.View {
 	case modeHelp:
 		body = m.renderHelp(boxW)
 	case modeSkillDetail:
+		if m.selectedProj != nil {
+			body = m.styles.box.Width(boxW).Render(PresentProjectSkillDetail(*m.selectedProj))
+			break
+		}
 		activity := app.SkillActivity(m.history, m.operations, m.selectedSk)
 		body = m.styles.box.Width(boxW).Render(PresentSkillDetailWithActivity(
 			m.selectedSk,
@@ -1210,7 +1238,17 @@ func (m *Model) refreshTables() {
 	w := max(40, m.width)
 	m.allRows = append(PresentSkills(m.skills, ""), PresentParked(m.parked, "")...)
 	q := m.filterInput.Value()
-	m.skillRows = m.filterRows(slices.Concat(PresentSkills(m.skills, q), PresentParked(m.parked, q), m.presentIgnored(q)))
+	if len(m.projectSkills) == 0 {
+		m.skillRows = m.filterRows(slices.Concat(PresentSkills(m.skills, q), PresentParked(m.parked, q), m.presentIgnored(q)))
+	} else {
+		m.allRows = append(m.allRows, PresentProjectSkills(m.projectSkills, "")...)
+		m.skillRows = m.filterRows(slices.Concat(
+			PresentSkills(m.skills, q),
+			PresentParked(m.parked, q),
+			PresentProjectSkills(m.projectSkills, q),
+			m.presentIgnored(q),
+		))
+	}
 	skW := allocateColumns(w, []int{12, 12, 10, 20, 12}, []int{2, 1, 1, 3, 2})
 	m.skillsTable.SetColumns([]table.Column{
 		{Title: colSkillName, Width: skW[0]},
@@ -1329,6 +1367,10 @@ func loadDataCmd(a *app.App) tea.Cmd {
 		if err != nil {
 			return dataLoadedMsg{err: err}
 		}
+		projSkills, err := a.ProjectSkills()
+		if err != nil {
+			return dataLoadedMsg{err: err}
+		}
 		ignored, err := a.Ignored(ctx)
 		if err != nil {
 			return dataLoadedMsg{err: err}
@@ -1345,18 +1387,19 @@ func loadDataCmd(a *app.App) tea.Cmd {
 			sightings = nil
 		}
 		return dataLoadedMsg{
-			operations: a.Operations(ctx, hist),
-			visibility: vis,
-			sightings:  sightings,
-			parked:     parked,
-			skills:     skills,
-			ignored:    ignored,
-			candidates: cands,
-			lastCheck:  lastCheck,
-			unchecked:  unchecked,
-			history:    hist,
-			settings:   st,
-			bgStatus:   bg,
+			operations:    a.Operations(ctx, hist),
+			visibility:    vis,
+			sightings:     sightings,
+			parked:        parked,
+			projectSkills: projSkills,
+			skills:        skills,
+			ignored:       ignored,
+			candidates:    cands,
+			lastCheck:     lastCheck,
+			unchecked:     unchecked,
+			history:       hist,
+			settings:      st,
+			bgStatus:      bg,
 		}
 	}
 }

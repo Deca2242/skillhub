@@ -108,7 +108,12 @@ func (m *Model) renderSkills() string {
 	}
 	items := make([]listItem, 0, len(m.skillRows))
 	for _, r := range m.skillRows {
-		items = append(items, listItem{icon: r.Kind.Icon(), style: m.styles.icons[r.Kind], name: text.SafeLine(r.RawName), short: r.Short})
+		items = append(items, listItem{
+			icon:  r.Kind.Icon(),
+			style: m.styles.icons[r.Kind],
+			name:  text.SafeLine(r.RawName),
+			short: m.rowShort(r),
+		})
 	}
 	list := func(width, height int) []string {
 		return m.listLines(m.listTitle(), items, m.skillsTable.Cursor(), &m.listTop, width, height)
@@ -240,7 +245,10 @@ func (m *Model) panelLines(width int) []string {
 		lines = append(lines, "")
 		lines = append(lines, m.skillLines(s, text.TUIStateIgnored, wrap)...)
 		lines = append(lines, m.activityLines(s, wrap)...)
-		actions = []string{text.TUIActionUnignore, text.TUIActionDetail}
+		if m.actions[row.ID].Remove {
+			actions = append(actions, text.TUIActionRemove)
+		}
+		actions = append(actions, text.TUIActionUnignore, text.TUIActionDetail)
 	case row.ParkedKey != "":
 		p, _ := m.parkedByKey(row.ParkedKey)
 		lines = append(lines, wrap(text.TUIPanelDisabledSince(FormatTime(p.Since)))...)
@@ -257,7 +265,28 @@ func (m *Model) panelLines(width int) []string {
 			Locations: []domain.Location{{AgentID: domain.StoreAgentID, Path: p.Key}},
 		}
 		lines = append(lines, m.activityLines(parkedSkill, wrap)...)
-		actions = []string{text.TUIActionEnable}
+		actions = []string{text.TUIActionEnable, text.TUIActionRemove}
+	case row.Project != nil:
+		proj := *row.Project
+		lines = append(lines, wrap("Skill del proyecto actual ("+text.SafeLine(proj.Root)+")")...)
+		if proj.Removable {
+			lines = append(lines, wrap(text.TUIGuideRecommended+m.actionLabel(text.TUIActionRemove))...)
+		} else {
+			for _, l := range wrap(projectNonRemovableReason(proj)) {
+				lines = append(lines, m.styles.problem.Render(l))
+			}
+		}
+		lines = append(lines, "")
+		lines = append(lines, wrap("Proyecto: "+text.SafeLine(proj.ProjectDir))...)
+		lines = append(lines, wrap("Carpeta: "+text.SafeLine(proj.Path))...)
+		if proj.TreeSHA != "" {
+			lines = append(lines, wrap("Árbol: "+ShortSHA(proj.TreeSHA))...)
+		}
+		for _, a := range m.rowActions(row) {
+			if !proj.Removable || a.key != "e" {
+				actions = append(actions, a.label)
+			}
+		}
 	default:
 		s, _ := m.skillByID(row.ID)
 		acts := m.actions[row.ID]
@@ -371,6 +400,9 @@ func (m *Model) whyVisibleLines(skillID string, wrap func(string) []string) []st
 func (m *Model) visibilityCounts() text.SkillVisibilityCounts {
 	var c text.SkillVisibilityCounts
 	for _, r := range m.allRows {
+		if r.Project != nil {
+			continue
+		}
 		seen := len(m.seenBy(r)) > 0
 		disabled := m.disabledRow(r)
 		if seen {
@@ -493,7 +525,7 @@ func (m *Model) skillsKeys() string {
 		switch {
 		case row.Ignored:
 			keys = append(keys, text.TUIKeyUnignore)
-		case row.ParkedKey == "":
+		case row.ParkedKey == "" && row.Project == nil:
 			keys = append(keys, text.TUIKeyIgnore)
 		}
 	}
@@ -511,25 +543,40 @@ type panelAction struct {
 // plan for it now (L83), never one guessed from its state.
 func (m *Model) rowActions(row SkillRow) []panelAction {
 	if row.ParkedKey != "" {
-		return []panelAction{{"a", text.TUIActionEnable, text.TUIKeyEnable}}
+		return []panelAction{
+			{"a", text.TUIActionEnable, text.TUIKeyEnable},
+			{"e", text.TUIActionRemove, text.TUIKeyRemove},
+		}
+	}
+	if row.Project != nil {
+		var out []panelAction
+		if row.Project.Removable {
+			out = append(out, panelAction{"e", text.TUIActionRemove, text.TUIKeyRemove})
+		}
+		return append(out, panelAction{"enter", text.TUIActionDetail, text.TUIKeyDetail})
 	}
 	if row.Ignored {
-		// An ignored skill is not managed until x stops ignoring it.
-		return []panelAction{{"enter", text.TUIActionDetail, text.TUIKeyDetail}}
+		// An ignored skill keeps its ignore preference; e still removes it
+		// when the planner accepts its exact target.
+		var out []panelAction
+		if m.actions[row.ID].Remove {
+			out = append(out, panelAction{"e", text.TUIActionRemove, text.TUIKeyRemove})
+		}
+		return append(out, panelAction{"enter", text.TUIActionDetail, text.TUIKeyDetail})
 	}
 	acts := m.actions[row.ID]
 	var out []panelAction
 	if acts.Disable {
 		out = append(out, panelAction{"d", text.TUIActionDisable, text.TUIKeyDisable})
 	}
+	if acts.Off {
+		out = append(out, panelAction{"o", text.TUIActionAdoptOff, text.TUIKeyAdoptOff})
+	}
 	if acts.Remove {
 		out = append(out, panelAction{"e", text.TUIActionRemove, text.TUIKeyRemove})
 	}
 	if acts.Key != "" && (len(acts.Unlink) > 0 || acts.LinkIn != "") {
 		out = append(out, panelAction{"l", text.TUIActionAgents, text.TUIKeyAgents})
-	}
-	if acts.Off {
-		out = append(out, panelAction{"o", text.TUIActionAdoptOff, text.TUIKeyAdoptOff})
 	}
 	switch _, one := rowFix(acts); {
 	case one:
@@ -562,6 +609,13 @@ func (m *Model) guide(row SkillRow, s domain.Skill, acts app.SkillActions) (stri
 		return text.TUIPanelLinksInDoctor(len(acts.BrokenLinks)), offered("4")
 	case s.State == domain.StateUpdateAvailable:
 		return text.TUIGuideUpdate, panelAction{"2", text.TUIActionSeeUpdate, text.TUIKeySeeUpdate}
+	case acts.Provider != "":
+		return text.TUIGuideProvider(acts.Provider), panelAction{}
+	case m.isManual(s):
+		if rec := offered("e"); rec.key != "" {
+			return text.TUIGuideManual, rec
+		}
+		return text.TUIGuideManual, panelAction{"4", text.TUIActionSeeHealth, text.TUIKeySeeHealth}
 	case m.actions != nil && acts.Key == "" && s.State == domain.StateNoOrigin:
 		return text.TUIGuideUnmgd, panelAction{"4", text.TUIActionSeeHealth, text.TUIKeySeeHealth}
 	case m.actions != nil && acts.Key == "":
@@ -597,6 +651,25 @@ func fixedByAdoptOff(acts app.SkillActions) bool {
 		}
 	}
 	return true
+}
+
+// isManual reports whether s is a confirmed independent manual installation.
+func (m *Model) isManual(s domain.Skill) bool {
+	return m.actions != nil && m.actions[s.ID].Manual
+}
+
+func (m *Model) rowShort(r SkillRow) string {
+	if r.ParkedKey == "" && !r.Ignored {
+		if s, ok := m.skillByID(r.ID); ok {
+			if m.isManual(s) {
+				return text.TUIRowManual
+			}
+			if m.actions != nil && m.actions[s.ID].Provider != "" {
+				return text.TUIRowProvider
+			}
+		}
+	}
+	return r.Short
 }
 
 // offers reports whether the panel of row offers key.

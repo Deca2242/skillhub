@@ -65,7 +65,8 @@ func toggleView(pv toggle.Preview) *TogglePreview {
 
 func removeView(pv remove.Preview) *RemovePreview {
 	out := &RemovePreview{
-		Key: pv.Key, Parked: pv.Parked, Folder: pv.Folder, TreeSHA: pv.TreeSHA, ParkedEntry: pv.ParkedEntry,
+		Key: pv.Key, Project: pv.Project, ProjectDir: pv.ProjectDir, ProjectRoot: pv.ProjectRoot, SkillName: pv.SkillName,
+		Parked: pv.Parked, Off: pv.Off, Folder: pv.Folder, TreeSHA: pv.TreeSHA, ParkedEntry: pv.ParkedEntry,
 		Modified: string(pv.Modified.State), ModifiedExpected: pv.Modified.Expected, ModifiedActual: pv.Modified.Actual,
 		PendingCandidates: slices.Clone(pv.PendingCandidates), Targets: slices.Clone(pv.Targets),
 	}

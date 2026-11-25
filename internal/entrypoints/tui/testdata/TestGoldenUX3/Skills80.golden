@@ -5,14 +5,14 @@ Visibles: 14 · sin agente: 3 (4 desactivadas visibles, 2 activas sin agente)
 │ Skills (17)
 │ ⚠ accessibility                                                  enlace roto
 │ ● agent-browser                                                  sin revisar
-│ ⚠ brainstorming                                                sin gestionar
+│ ⚠ brainstorming                                                       manual
 │ ⚠ computer-use                                                    modificada
 │ ⚠ domain-driven-design                                           enlace roto
 │ ● find-skills                                                    sin revisar
 │ ⚠ git-guardrails-claude-code                                     enlace roto
 │ ● grill-me                                                       sin revisar
 │ ● grill-with-docs                                                sin revisar
-│ ⚠ humanizer                                                    sin gestionar
+│ ⚠ humanizer                                                           manual
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭──────────────────────────────────────────────────────────────────────────────╮
 │ accessibility
@@ -26,5 +26,5 @@ Visibles: 14 · sin agente: 3 (4 desactivadas visibles, 2 activas sin agente)
 │ Disponible en: Codex, OpenCode y Pi
 │   Codex, OpenCode y Pi: directamente, sin enlace
 ╰──────────────────────────────────────────────────────────────────────────────╯
-o desactivarla de verdad • enter ver todo • x ignorar • / buscar • f filtrar • g
-ver por agente • ? ayuda • q salir
+o desactivarla de verdad • e eliminar • enter ver todo • x ignorar • / buscar •
+f filtrar • g ver por agente • ? ayuda • q salir

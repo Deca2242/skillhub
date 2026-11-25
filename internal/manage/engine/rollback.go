@@ -21,13 +21,17 @@ import (
 // second pass undo, checking each step again right before undoing it. So
 // foreign state anywhere leaves everything as it is.
 func (e *Engine) rollbackSteps(rec Record, snap Snapshot) error {
+	if err := e.requireProjectGate(rec.Plan, "rollback"); err != nil {
+		return err
+	}
 	steps := rec.Plan.Steps
 	last := min(rec.LastCompleted+1, len(steps)-1)
-	if err := e.dryRollback(rec.Plan, last); err != nil {
+	clones := cloneObjects(rec.Plan)
+	if err := e.dryRollback(rec.Plan, last, clones); err != nil {
 		return err
 	}
 	for i := last; i >= 0; i-- {
-		prog, seen, err := e.observeBack(rec.Plan, i)
+		prog, seen, err := e.observeBack(rec.Plan, i, clones)
 		if err != nil {
 			return err
 		}
@@ -41,7 +45,7 @@ func (e *Engine) rollbackSteps(rec Record, snap Snapshot) error {
 		if err := e.undoStep(rec, snap, i, prog); err != nil {
 			return fmt.Errorf("undo step %d (%s): %w", i, steps[i].Kind, err)
 		}
-		if prog, seen, err = e.observeBack(rec.Plan, i); err != nil {
+		if prog, seen, err = e.observeBack(rec.Plan, i, clones); err != nil {
 			return err
 		} else if prog != NotRun {
 			return foreign(rec.Plan, i, seen)
@@ -51,8 +55,8 @@ func (e *Engine) rollbackSteps(rec Record, snap Snapshot) error {
 }
 
 // observeBack observes step i of p for a rollback.
-func (e *Engine) observeBack(p Plan, i int) (Progress, []Image, error) {
-	_, seen, err := e.observe(p.Steps[i])
+func (e *Engine) observeBack(p Plan, i int, clones map[string]bool) (Progress, []Image, error) {
+	_, seen, err := e.observe(p, p.Steps[i], clones)
 	if err != nil {
 		return "", nil, err
 	}
@@ -94,8 +98,8 @@ func beforeEarlierStep(p Plan, i int, img Image) bool {
 
 // dryRollback walks steps last..0 over the disk as the rollback would, and
 // reports the first foreign object. It changes nothing.
-func (e *Engine) dryRollback(p Plan, last int) error {
-	v := e.newView()
+func (e *Engine) dryRollback(p Plan, last int, clones map[string]bool) error {
+	v := e.newPlanView(p.Project)
 	cur := map[string]Image{}
 	for i := last; i >= 0; i-- {
 		s := p.Steps[i]
@@ -104,7 +108,7 @@ func (e *Engine) dryRollback(p Plan, last int) error {
 			img, ok := cur[want.object()]
 			if !ok {
 				var err error
-				if img, err = v.image(want); err != nil {
+				if img, err = v.observe(want, clones[want.object()]); err != nil {
 					return err
 				}
 			}
@@ -143,9 +147,24 @@ func (e *Engine) undoStep(rec Record, snap Snapshot, i int, prog Progress) error
 			return fmt.Errorf("%w: no copy of %s", ErrSnapshotNotFound, s.Path)
 		}
 		copyDir := filepath.Join(e.SnapshotDir(snap.SnapshotID), filepath.FromSlash(t.Copy))
+		if rec.Plan.HasProjectScope() {
+			return e.restoreProjectTree(copyDir, *rec.Plan.Project, t.TreeSHA, e.staging(rec, i))
+		}
 		return e.publish(copyDir, s.Path, t.TreeSHA, e.staging(rec, i))
 	case StepRestoreTree:
+		if rec.Plan.HasProjectScope() {
+			return e.removeProjectTree(*rec.Plan.Project, e.trash(rec, i))
+		}
 		return e.d.Files.RemoveTree(s.Path)
+	case StepRemoveClone:
+		t, ok := snap.treeCopy(s.Path)
+		if !ok || t.CloneSHA == "" {
+			return fmt.Errorf("%w: no clone copy of %s", ErrSnapshotNotFound, s.Path)
+		}
+		copyDir := filepath.Join(e.SnapshotDir(snap.SnapshotID), filepath.FromSlash(t.Copy))
+		return e.publishClone(copyDir, s.Path, t.CloneSHA, e.staging(rec, i))
+	case StepRestoreClone:
+		return e.removeTree(s.Path, e.trash(rec, i))
 	case StepRequire:
 		return nil // it changed nothing
 	case StepLockPark, StepLockRemove:
@@ -265,6 +284,9 @@ func (e *Engine) Recover(ctx context.Context) (RecoverResult, error) {
 func (e *Engine) recover() (RecoverResult, error) {
 	rec, pending, err := e.PendingRecord()
 	if err != nil || !pending {
+		return RecoverResult{}, err
+	}
+	if err := e.requireProjectGate(rec.Plan, "recover"); err != nil {
 		return RecoverResult{}, err
 	}
 	res := RecoverResult{Found: true, PlanID: rec.PlanID, SnapshotID: rec.SnapshotID}

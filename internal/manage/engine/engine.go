@@ -40,6 +40,21 @@ type Files interface {
 	Chmod(path string, perm fs.FileMode) error
 }
 
+// DirReader is an optional capability on Files that lists direct directory
+// entries sorted by name without following a final symlink. Whole-clone
+// snapshot verification fails closed when Files does not implement it.
+type DirReader interface {
+	ReadDir(dir string) ([]fs.DirEntry, error)
+}
+
+// EntryMetadataReader is an optional capability on Files that inspects an
+// entry's hard-link count, extended attributes, and ACLs without following a
+// final symlink. Whole-clone snapshot verification fails closed when Files
+// does not implement it.
+type EntryMetadataReader interface {
+	EntryMetadata(path string) (nlink uint64, hasXattrs, hasACLs bool, err error)
+}
+
 // Links reads, creates and removes symlinks and moves folders, never
 // replacing an existing path (ports.LinkOps).
 type Links interface {
@@ -89,6 +104,16 @@ type Dirs interface {
 	Scan(dir string) ([]ports.DirEntry, error)
 }
 
+// ProjectFS inspects, copies, removes to trash, and restores from staging an
+// exact project-scoped skill directory without following symlinks.
+type ProjectFS interface {
+	ObserveSkill(projectDir, root, name string) (exists bool, foreign bool, tree treehash.Tree, err error)
+	SameDevice(projectDir, root, otherDir string) (bool, error)
+	CopySkill(projectDir, root, name, dstDir string) (treehash.Tree, error)
+	RemoveSkillToTrash(projectDir, root, name, trashDest string) error
+	RestoreSkillFromStaging(stagingSrc, projectDir, root, name string) error
+}
+
 // Clock tells the time.
 type Clock interface {
 	Now() time.Time
@@ -108,6 +133,9 @@ type Deps struct {
 	Clock    Clock
 	// HashDir hashes a folder on disk; nil means treehash.Dir.
 	HashDir func(dir string) (treehash.Tree, error)
+	// ProjectDir and ProjectFS enable project-scoped plans when ProjectFS is non-nil.
+	ProjectDir string
+	ProjectFS  ProjectFS
 }
 
 // Engine plans, records and snapshots version 2 operations.

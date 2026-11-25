@@ -23,8 +23,8 @@ const (
 	InstallShort  = "Instala una skill desde GitHub o desde un sitio web tras revisarla"
 	InstallLong   = "Resuelve el origen, de GitHub (owner/repo, owner/repo@skill, owner/repo/ruta o la URL github.com/o/r/tree/ref/ruta) o de un sitio web que publica sus skills en /.well-known/agent-skills/ (https://sitio@skill, por ejemplo https://uizze.sh@ui-taste; sin @skill, el sitio debe publicar una sola), prepara la skill y muestra su revisión completa: archivos, etiquetas de riesgo y diff contra una carpeta vacía. Después muestra el plan (mover la copia revisada al almacén, crear los enlaces y añadir la entrada del lock) y pide confirmación. Sin --to, los destinos son los harness detectados que se proponen; es una propuesta que apruebas con el plan, nunca un permiso automático. Un sitio web se lee solo por https, con curl y con límites de tamaño; las actualizaciones de sus skills todavía no se revisan."
 	RemoveUse     = "remove <skill> [--dry-run] [--yes --plan <id>]"
-	RemoveShort   = "Elimina una skill administrada, activa o desactivada"
-	RemoveLong    = "Quita los enlaces de sus destinos, borra su carpeta y quita su entrada del lock. Todo queda en un snapshot y se deshace con «skillhub undo». Las copias con el mismo nombre en otros harness no se tocan: se informan. Una actualización pendiente de la skill pasa a reemplazada."
+	RemoveShort   = "Elimina una skill independiente (global o del proyecto actual)"
+	RemoveLong    = "Quita los enlaces que apuntan a la carpeta elegida, borra esa carpeta y, cuando corresponde, quita su entrada del lock. Acepta una clave del almacén o aparcada (<clave>), o un identificador exacto: dir:<ruta> (carpeta global directa en el almacén, en OFF/ o en el directorio de un agente), lock:<nombre>, parked:<clave>, project:.agents/skills/<nombre> o project:.claude/skills/<nombre>. Nunca elimina varias copias por nombre ni toca clones de git, enlaces simbólicos, otros proyectos, proveedores ni perfiles. Todo queda en un snapshot y se deshace con «skillhub undo» (una skill de proyecto requiere ejecutarlo en ese mismo proyecto). Las copias con el mismo nombre en otros ámbitos o agentes no se tocan: se informan. Una actualización pendiente de la skill pasa a reemplazada."
 	DisableUse    = "disable <skill> [--dry-run] [--yes --plan <id>]"
 	DisableShort  = "Desactiva una skill en todos sus destinos gestionados"
 	DisableLong   = "Quita sus enlaces, aparca su carpeta en ~/.agents/.skillhub/disabled y aparca su entrada del lock, para que «npx skills update» no la reinstale. Un harness que tiene una copia propia la sigue viendo, y el plan lo avisa."
@@ -268,6 +268,9 @@ func Title(p app.Proposal) string {
 	case app.ActionAdoptOff:
 		return "Adoptar como desactivadas las skills de OFF/"
 	case app.ActionRemove:
+		if p.Remove != nil && p.Remove.Key != "" {
+			return fmt.Sprintf("Eliminar %s", SafeLine(p.Remove.Key))
+		}
 		return fmt.Sprintf("Eliminar %s", key)
 	case app.ActionInstall:
 		if p.Install != nil {
@@ -415,8 +418,13 @@ var modified = map[string]string{
 
 func writeRemove(b *strings.Builder, r *app.RemovePreview) {
 	state := "activa"
-	if r.Parked {
+	switch {
+	case r.Project:
+		state = "proyecto (" + SafeLine(r.ProjectRoot) + ")"
+	case r.Parked:
 		state = "desactivada"
+	case r.Off:
+		state = "desactivada a mano en OFF/"
 	}
 	if r.Folder == "" {
 		// A parked record whose folder was already gone (park_entry).
@@ -756,7 +764,7 @@ var refusalTexts = []refusalText{
 	{app.ErrOperationPending, fixed("hay una operación sin terminar; ejecuta «skillhub recover» antes de continuar")},
 	{app.ErrChangedSince, fixed("algo cambió después de la operación; deshacer se niega para no pisar ese cambio")},
 	{app.ErrNothingToUndo, fixed("no hay nada que deshacer")},
-	{app.ErrUnsupportedTree, fixed("la carpeta no se puede guardar en un snapshot (por ejemplo, tiene archivos especiales o bits setuid)")},
+	{app.ErrUnsupportedTree, fixed("la carpeta no se puede guardar en un snapshot (por ejemplo, es un clon de git o pertenece a uno, o tiene archivos especiales o bits setuid)")},
 	{app.ErrNoEntryToReinstall, func(req app.Request, _ []string) string {
 		return fmt.Sprintf("el lock no tiene ninguna entrada «%s» que reinstalar; para una skill nueva, usa «skillhub skills install»", installKey(req))
 	}},
@@ -789,6 +797,15 @@ var refusalTexts = []refusalText{
 	{app.ErrStagingFailed, fixed("no se pudo leer ni vaciar la copia preparada para instalar en ~/.agents/.skillhub/staging; revisa los permisos de esa carpeta y vuelve a intentarlo")},
 	{app.ErrLockMalformed, fixed("el lock de skills está mal formado; skillhub no lo toca. Corrígelo o vuelve a generarlo con npx skills")},
 	{app.ErrLockChanged, fixed("el lock de skills cambió mientras tanto (quizá por «npx skills»); no se cambió nada. Vuelve a ver el plan")},
+	{app.ErrNoProject, fixed("no hay un proyecto actual válido desde el que eliminar una skill de proyecto")},
+	{app.ErrProjectLinked, fixed("la raíz o la carpeta de la skill en el proyecto es un enlace simbólico; skillhub solo opera sobre carpetas reales del proyecto actual")},
+	{app.ErrWrongProject, func(_ app.Request, related []string) string {
+		if len(related) > 0 {
+			return fmt.Sprintf("esta operación pertenece al proyecto %s; vuelve a abrir skillhub desde esa carpeta para continuarla o deshacerla", SafeLine(related[0]))
+		}
+		return "esta operación pertenece a otro proyecto; vuelve a abrir skillhub desde esa carpeta para continuarla o deshacerla"
+	}},
+	{app.ErrCrossDevice, fixed("la carpeta de la skill y la papelera de skillhub están en sistemas de archivos distintos; no se movió nada")},
 }
 
 // installKey is the skill key of an install or reinstall request.

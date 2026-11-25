@@ -19,7 +19,8 @@ const supportedLockVersion = 3
 // view observes the disk for one pass: paths are read each time they are
 // asked for, the lock once.
 type view struct {
-	e *Engine
+	e       *Engine
+	project *ProjectScope
 
 	lockLoaded bool
 	lockHash   string // "" when the lock does not exist
@@ -29,8 +30,19 @@ type view struct {
 
 func (e *Engine) newView() *view { return &view{e: e} }
 
+func (e *Engine) newPlanView(proj *ProjectScope) *view {
+	if proj == nil {
+		return e.newView()
+	}
+	cp := *proj
+	return &view{e: e, project: &cp}
+}
+
 // path observes one path without following a final symlink.
 func (v *view) path(p string) (Image, error) {
+	if v.project != nil {
+		return v.projectPath(p)
+	}
 	mode, err := v.e.d.Files.Mode(p)
 	if errors.Is(err, fs.ErrNotExist) {
 		return Image{Path: p, State: StateAbsent}, nil
@@ -54,6 +66,30 @@ func (v *view) path(p string) (Image, error) {
 	default:
 		return Image{Path: p, State: StateOther}, nil
 	}
+}
+
+func (v *view) projectPath(p string) (Image, error) {
+	wantPath, err := v.project.SkillPath()
+	if err != nil {
+		return Image{}, fmt.Errorf("%w: %w", ErrInvalidStep, err)
+	}
+	if p != wantPath {
+		return Image{}, fmt.Errorf("%w: project step targets %q, expected %q", ErrInvalidStep, p, wantPath)
+	}
+	if v.e == nil || v.e.d.ProjectFS == nil {
+		return Image{}, fmt.Errorf("%w: observe %s", ErrProjectScopeUnsupported, p)
+	}
+	exists, foreign, tree, err := v.e.d.ProjectFS.ObserveSkill(v.project.ProjectDir, string(v.project.Root), v.project.SkillName)
+	if err != nil {
+		return Image{}, fmt.Errorf("%w: %w", ErrUnsupportedTree, err)
+	}
+	if !exists {
+		return Image{Path: p, State: StateAbsent}, nil
+	}
+	if foreign {
+		return Image{Path: p, State: StateOther}, nil
+	}
+	return Image{Path: p, State: StateTree, TreeSHA: tree.SHA}, nil
 }
 
 // hashTree hashes a real folder the snapshot can keep exactly. A folder
@@ -164,10 +200,70 @@ func (v *view) entry(name string) (Image, error) {
 
 // image observes the object an image describes.
 func (v *view) image(of Image) (Image, error) {
+	return v.observe(of, of.State == StateClone)
+}
+
+func (v *view) observe(of Image, allowClone bool) (Image, error) {
 	if of.Entry != "" {
 		return v.entry(of.Entry)
 	}
+	if allowClone {
+		return v.cloneOrPath(of.Path)
+	}
 	return v.path(of.Path)
+}
+
+func (v *view) cloneOrPath(p string) (Image, error) {
+	mode, err := v.e.d.Files.Mode(p)
+	if errors.Is(err, fs.ErrNotExist) {
+		return Image{Path: p, State: StateAbsent}, nil
+	}
+	if err != nil {
+		return Image{}, fmt.Errorf("look at %s: %w", p, err)
+	}
+	switch {
+	case mode&fs.ModeSymlink != 0:
+		target, err := v.e.d.Links.Readlink(p)
+		if err != nil {
+			return Image{}, fmt.Errorf("read link %s: %w", p, err)
+		}
+		return Image{Path: p, State: StateLink, Target: target}, nil
+	case mode.IsDir():
+		hasGit, err := v.e.d.Files.Exists(filepath.Join(p, ".git"))
+		if err != nil {
+			return Image{}, fmt.Errorf("look for .git in %s: %w", p, err)
+		}
+		if hasGit {
+			manifest, err := v.e.inspectClone(p)
+			if err != nil {
+				return Image{}, err
+			}
+			return Image{Path: p, State: StateClone, CloneSHA: manifest.SHA}, nil
+		}
+		tree, err := v.e.hashTree(p)
+		if err != nil {
+			return Image{}, err
+		}
+		return Image{Path: p, State: StateTree, TreeSHA: tree.SHA}, nil
+	default:
+		return Image{Path: p, State: StateOther}, nil
+	}
+}
+
+func stepAllowsClone(s Step) bool {
+	return s.Kind == StepRemoveClone || s.Kind == StepRestoreClone
+}
+
+func cloneObjects(p Plan) map[string]bool {
+	out := map[string]bool{}
+	for _, s := range p.Steps {
+		if stepAllowsClone(s) {
+			for _, img := range s.Pre {
+				out[img.object()] = true
+			}
+		}
+	}
+	return out
 }
 
 // canonicalEntry is raw as the lock store writes and reads it back
@@ -203,10 +299,11 @@ func (e *Engine) StepProgress(s Step) (Progress, []Image, error) {
 		return "", nil, err
 	}
 	v := e.newView()
+	allowClone := stepAllowsClone(s)
 	seen := make([]Image, len(s.Pre))
 	pre, post := true, true
 	for i := range s.Pre {
-		img, err := v.image(s.Pre[i])
+		img, err := v.observe(s.Pre[i], allowClone)
 		if err != nil {
 			return "", nil, err
 		}
@@ -228,9 +325,7 @@ func (e *Engine) StepProgress(s Step) (Progress, []Image, error) {
 // step's image of an object already touched equal to what the previous step
 // left, and TouchesLock set exactly when a step touches the lock.
 func (p Plan) validate() error {
-	after := map[string]Image{}
-	gone := []string{}       // paths earlier steps moved away or removed
-	used := map[string]int{} // path -> the step that touches it
+	tracker := newPathTracker()
 	touches := false
 	for i, s := range p.Steps {
 		if err := s.shape(); err != nil {
@@ -240,21 +335,21 @@ func (p Plan) validate() error {
 			return fmt.Errorf("step %d: %w", i, err)
 		}
 		touches = touches || s.touchesLock()
-		if err := checkPaths(i, s, gone, used, after); err != nil {
+		if err := tracker.checkStep(i, s); err != nil {
 			return err
 		}
 		switch s.Kind {
 		case StepMove:
-			gone = append(gone, s.Src)
-		case StepRemoveTree, StepUnlink:
-			gone = append(gone, s.Path)
+			tracker.gone = append(tracker.gone, s.Src)
+		case StepRemoveTree, StepRemoveClone, StepUnlink:
+			tracker.gone = append(tracker.gone, s.Path)
 		}
 		for j, img := range s.Pre {
-			if prev, ok := after[img.object()]; ok && !prev.same(img) {
+			if prev, ok := tracker.after[img.object()]; ok && !prev.same(img) {
 				return fmt.Errorf("%w: step %d expects %s as %s, the step before leaves %s",
 					ErrInvalidStep, i, img.object(), img.describe(), prev.describe())
 			}
-			after[img.object()] = s.Post[j]
+			tracker.after[img.object()] = s.Post[j]
 		}
 	}
 	if touches != p.TouchesLock {
@@ -266,36 +361,95 @@ func (p Plan) validate() error {
 	if p.Undoes != "" && !validSnapshotID(p.Undoes) {
 		return fmt.Errorf("%w: undoes %q", ErrInvalidStep, p.Undoes)
 	}
+	if err := p.ValidateProjectScope(); err != nil {
+		return err
+	}
 	return p.Effect.validate(p.Steps)
 }
 
-// checkPaths refuses a step whose paths nest or repeat: a move into its own
-// source, a path inside one an earlier step moved away or removed, or a path
-// an earlier step already touches. The one repeat allowed is a replacement
-// in place (docs/design-v2.md section 8): a step whose preimage of the path
-// is absent may use it again when the earlier step on it left it absent, as
-// after holds it. Lock entries may chain freely.
-func checkPaths(i int, s Step, gone []string, used map[string]int, after map[string]Image) error {
+type pathTracker struct {
+	gone       []string
+	used       map[string]int
+	usedOrder  []string
+	cloneUsed  map[string]int
+	cloneOrder []string
+	after      map[string]Image
+}
+
+func newPathTracker() *pathTracker {
+	return &pathTracker{
+		used:      map[string]int{},
+		cloneUsed: map[string]int{},
+		after:     map[string]Image{},
+	}
+}
+
+// checkStep refuses a step whose paths nest or repeat: a move into its own
+// source, a path inside one an earlier step moved away or removed, a path an
+// earlier step already touches, or any mixed or nested use of a clone root.
+// The one repeat allowed is a non-clone replacement in place
+// (docs/design-v2.md section 8): a step whose preimage of the path is absent
+// may use it again when the earlier step on it left it absent, as after holds
+// it. Lock entries may chain freely.
+func (t *pathTracker) checkStep(i int, s Step) error {
 	if s.Kind == StepMove && within(s.Dst, s.Src) {
 		return fmt.Errorf("%w: step %d moves %s into itself", ErrInvalidStep, i, s.Src)
 	}
+	isCloneStep := stepAllowsClone(s)
 	for _, img := range s.Pre {
 		if img.Entry != "" {
 			continue
 		}
-		if j, ok := used[img.Path]; ok && !(img.State == StateAbsent && after[img.object()].State == StateAbsent) {
-			return fmt.Errorf("%w: steps %d and %d both touch %s", ErrInvalidStep, j, i, img.Path)
+		if j, ok := t.used[img.Path]; ok {
+			if _, wasClone := t.cloneUsed[img.Path]; isCloneStep || wasClone {
+				return fmt.Errorf("%w: steps %d and %d cannot mix clone and other steps on %s", ErrInvalidStep, j, i, img.Path)
+			}
+			if !(img.State == StateAbsent && t.after[img.object()].State == StateAbsent) {
+				return fmt.Errorf("%w: steps %d and %d both touch %s", ErrInvalidStep, j, i, img.Path)
+			}
 		}
-		for _, g := range gone {
+		for _, g := range t.gone {
 			if within(img.Path, g) {
 				return fmt.Errorf("%w: step %d touches %s inside %s, which an earlier step moved or removed",
 					ErrInvalidStep, i, img.Path, g)
 			}
 		}
+		if err := t.checkCloneNesting(i, s.Kind, img.Path, isCloneStep); err != nil {
+			return err
+		}
 	}
 	for _, img := range s.Pre {
-		if img.Entry == "" {
-			used[img.Path] = i
+		if img.Entry != "" {
+			continue
+		}
+		if _, ok := t.used[img.Path]; !ok {
+			t.usedOrder = append(t.usedOrder, img.Path)
+		}
+		t.used[img.Path] = i
+		if isCloneStep {
+			if _, ok := t.cloneUsed[img.Path]; !ok {
+				t.cloneOrder = append(t.cloneOrder, img.Path)
+			}
+			t.cloneUsed[img.Path] = i
+		}
+	}
+	return nil
+}
+
+func (t *pathTracker) checkCloneNesting(i int, kind StepKind, p string, isCloneStep bool) error {
+	if isCloneStep {
+		for _, u := range t.usedOrder {
+			if within(u, p) || within(p, u) {
+				return fmt.Errorf("%w: step %d (%s) on %s nests with step %d on %s",
+					ErrInvalidStep, i, kind, p, t.used[u], u)
+			}
+		}
+		return nil
+	}
+	for _, c := range t.cloneOrder {
+		if within(p, c) || within(c, p) {
+			return fmt.Errorf("%w: step %d touches %s, which nests with clone step %d on %s",
+				ErrInvalidStep, i, p, t.cloneUsed[c], c)
 		}
 	}
 	return nil
@@ -317,7 +471,19 @@ func (e *Engine) Check(p Plan) error {
 	if err := p.validate(); err != nil {
 		return err
 	}
-	v := e.newView()
+	if err := e.requireProjectGate(p, "check"); err != nil {
+		return err
+	}
+	if p.HasProjectScope() {
+		sameDev, err := e.d.ProjectFS.SameDevice(p.Project.ProjectDir, string(p.Project.Root), filepath.Dir(e.d.Paths.ParkedDir()))
+		if err != nil {
+			return fmt.Errorf("check device for %s: %w", p.Canonical, err)
+		}
+		if !sameDev {
+			return fmt.Errorf("move %s to %s: %w", p.Canonical, e.trashRoot(), ports.ErrCrossDevice)
+		}
+	}
+	v := e.newPlanView(p.Project)
 	if p.TouchesLock {
 		if err := v.loadLock(); err != nil {
 			return err
@@ -326,6 +492,7 @@ func (e *Engine) Check(p Plan) error {
 			return fmt.Errorf("%w: the skills lock is %q, the plan saw %q", ErrPlanChanged, v.lockHash, p.LockSHA)
 		}
 	}
+	clones := cloneObjects(p)
 	seen := map[string]bool{}
 	for i, s := range p.Steps {
 		for _, want := range s.Pre {
@@ -333,7 +500,7 @@ func (e *Engine) Check(p Plan) error {
 				continue
 			}
 			seen[want.object()] = true
-			got, err := v.image(want)
+			got, err := v.observe(want, clones[want.object()])
 			if err != nil {
 				return fmt.Errorf("step %d: %w", i, err)
 			}

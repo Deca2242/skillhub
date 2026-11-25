@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"skillhub/internal/app"
 	"skillhub/internal/shared/domain"
 )
 
@@ -302,6 +303,7 @@ const (
 	// TUIGuideRecommended introduces the recommended action.
 	TUIGuideRecommended = "Recomendado: "
 	TUIGuideUpdate      = "Hay una versión nueva de su autor."
+	TUIGuideManual      = "Instalación manual: skillhub no la gestiona ni la actualiza."
 	TUIGuideUnmgd       = "skillhub no la gestiona todavía."
 	TUIGuideProbs       = "Tiene un problema que revisar."
 
@@ -310,6 +312,25 @@ const (
 	TUIKeySeeUpdate    = "2 ver la actualización"
 	TUIKeySeeHealth    = "4 verla en Salud"
 )
+
+// TUIGuideProvider explains that a skill belongs to a confirmed external
+// provider or plugin manager and points to its verified surface or docs.
+func TUIGuideProvider(provider string) string {
+	switch provider {
+	case app.ProviderClaudePlugin:
+		return "Gestionada por un plugin de Claude Code. skillhub no puede eliminar una skill suelta de un plugin; desde Claude Code (plugins o «enabledPlugins» en settings.json, o con «claude plugin list» y «claude plugin uninstall <plugin>») desactivas o quitas el plugin completo."
+	case app.ProviderGentleAI:
+		return "Gestionada por gentle-ai. skillhub no puede eliminarla y gentle-ai no ofrece una acción verificada para quitar una sola skill; revisa la documentación o la configuración de gentle-ai (componente «skills» en state.json), que gestiona el conjunto."
+	case app.ProviderClaudeSynced:
+		return "Gestionada por Claude Code (skills sincronizadas de claude.ai). skillhub no puede eliminarla; revísala desde la interfaz o la configuración de Claude Code / claude.ai."
+	case app.ProviderCursor:
+		return "Gestionada por Cursor (skills integradas). skillhub no puede eliminarla; revísala en los ajustes o la documentación de Cursor."
+	case app.ProviderCodex:
+		return "Gestionada por Codex (skills del sistema o plugins). skillhub no puede eliminarla; para desactivarla o revisar el plugin, usa la configuración de Codex («config.toml» / «[[skills.config]]» o su interfaz de plugins) según su documentación."
+	default:
+		return "Gestionada por otro gestor. skillhub no puede eliminarla; revísala desde la interfaz o la documentación de ese proveedor."
+	}
+}
 
 // TUIGuideBrokenLinks is the situation of a skill with n broken links, in
 // the agents named.

@@ -4,9 +4,10 @@ Visibles: 15 · sin agente: 2 (4 desactivadas visibles, 2 activas sin agente)
 Búsqueda: own copy
 ╭──────────────────────────────────────╮╭──────────────────────────────────────────────────────────╮
 │ Skills (1)                           ││ humanizer
-│ ⚠ humanizer            sin gestionar ││ Coincide en: descripción
-│                                      ││ skillhub no la gestiona todavía.
-│                                      ││ Recomendado: [4] Verla en Salud
+│ ⚠ humanizer                   manual ││ Coincide en: descripción
+│                                      ││ Instalación manual: skillhub no la gestiona ni la
+│                                      ││ actualiza.
+│                                      ││ Recomendado: [e] Eliminar
 │                                      ││
 │                                      ││ own copy
 │                                      ││
@@ -24,7 +25,6 @@ Búsqueda: own copy
 │                                      ││
 │                                      ││
 │                                      ││
-│                                      ││
-│                                      ││
 ╰──────────────────────────────────────╯╰──────────────────────────────────────────────────────────╯
-enter ver todo • x ignorar • / buscar • f filtrar • g ver por agente • ? ayuda • q salir
+e eliminar • enter ver todo • x ignorar • / buscar • f filtrar • g ver por agente • ? ayuda • q
+salir

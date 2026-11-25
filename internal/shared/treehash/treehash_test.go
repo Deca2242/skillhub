@@ -6,9 +6,11 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"syscall"
 	"testing"
+	"testing/fstest"
 
 	"skillhub/internal/shared/treehash"
 	"skillhub/internal/testsupport"
@@ -165,4 +167,89 @@ func TestDirRejectsWhatGitCannotHash(t *testing.T) {
 			t.Fatalf("Dir(folder with a pipe) = %v, want ErrUnsupportedEntry", err)
 		}
 	})
+}
+
+func TestHashMatchesDirAndRefusesUnsupported(t *testing.T) {
+	// Parity across non-symlink fixtures from fixtures(): empty, only-empty-dirs,
+	// single-file, single-file-executable.
+	for _, f := range fixtures() {
+		if f.name == "full" {
+			// "full" contains symlinks, which Dir hashes as 120000 and Hash refuses.
+			continue
+		}
+		t.Run(f.name, func(t *testing.T) {
+			dir := f.build(t)
+			want, err := treehash.Dir(dir)
+			if err != nil {
+				t.Fatalf("Dir(%s): %v", f.name, err)
+			}
+			got, err := treehash.Hash(os.DirFS(dir).(treehash.Reader))
+			if err != nil {
+				t.Fatalf("Hash(%s): %v", f.name, err)
+			}
+			if got.SHA != want.SHA || !slices.Equal(got.Nodes, want.Nodes) {
+				t.Fatalf("Hash(%s) = %+v, want %+v", f.name, got, want)
+			}
+		})
+	}
+
+	// Custom fixture with nested subdirs, empty dirs, utf-8 names, executable bits, and spaces.
+	dir := t.TempDir()
+	for _, rel := range []struct {
+		path string
+		body string
+		mode os.FileMode
+	}{
+		{"SKILL.md", "---\nname: alpha\n---\nAlpha\n", 0o644},
+		{"docs/a b.md", "space\n", 0o644},
+		{"docs/ñandú.md", "utf8\n", 0o644},
+		{"scripts/run.sh", "#!/bin/sh\necho ok\n", 0o755},
+		{"empty-file", "", 0o644},
+	} {
+		full := filepath.Join(dir, filepath.FromSlash(rel.path))
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte(rel.body), rel.mode); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chmod(full, rel.mode); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "empty-subdir"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	want, err := treehash.Dir(dir)
+	if err != nil {
+		t.Fatalf("Dir: %v", err)
+	}
+	got, err := treehash.Hash(os.DirFS(dir).(treehash.Reader))
+	if err != nil {
+		t.Fatalf("Hash: %v", err)
+	}
+	if got.SHA != want.SHA || !slices.Equal(got.Nodes, want.Nodes) {
+		t.Fatalf("Hash = %+v, want %+v", got, want)
+	}
+
+	// Rejection cases.
+	if _, err := treehash.Hash(nil); !errors.Is(err, treehash.ErrUnsupportedEntry) {
+		t.Errorf("Hash(nil) = %v, want ErrUnsupportedEntry", err)
+	}
+	symRoot := t.TempDir()
+	if err := os.WriteFile(filepath.Join(symRoot, "SKILL.md"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("SKILL.md", filepath.Join(symRoot, "link")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := treehash.Hash(os.DirFS(symRoot).(treehash.Reader)); !errors.Is(err, treehash.ErrUnsupportedEntry) {
+		t.Errorf("Hash(symlink child) = %v, want ErrUnsupportedEntry", err)
+	}
+	if _, err := treehash.Hash(fstest.MapFS{".git/HEAD": {Data: []byte("ref: refs/heads/main\n")}}); !errors.Is(err, treehash.ErrUnsupportedEntry) {
+		t.Errorf("Hash(.git child) = %v, want ErrUnsupportedEntry", err)
+	}
+	if _, err := treehash.Hash(fstest.MapFS{".": {Mode: 0o644}}); !errors.Is(err, treehash.ErrUnsupportedEntry) {
+		t.Errorf("Hash(non-dir root) = %v, want ErrUnsupportedEntry", err)
+	}
 }

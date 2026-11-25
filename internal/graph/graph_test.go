@@ -2,6 +2,7 @@ package graph_test
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -429,4 +430,171 @@ func TestACopyIsNeverAttachedToAForeignZone(t *testing.T) {
 	if own.Zone != graph.ZoneNone || !slices.Equal(own.Folders, []string{real(t, h, ".codex/skills/karpathy-guidelines")}) {
 		t.Errorf("codex folder = %+v, want a skill of its own", own)
 	}
+}
+
+type failingGitDirs struct {
+	inner   graph.DirLister
+	failDir string
+	err     error
+}
+
+func (f failingGitDirs) Scan(dir string) ([]ports.DirEntry, error) {
+	if dir == f.failDir {
+		return nil, f.err
+	}
+	return f.inner.Scan(dir)
+}
+
+func folderByEntry(t *testing.T, g graph.Graph, entry string) graph.Folder {
+	t.Helper()
+	for _, f := range g.Folders {
+		if f.Entry == entry || slices.Contains(f.Entries, entry) {
+			return f
+		}
+	}
+	t.Fatalf("folder %q not in graph", entry)
+	return graph.Folder{}
+}
+
+func TestFolderGitEvidence(t *testing.T) {
+	if (graph.Folder{}).Git != graph.GitUnknown {
+		t.Fatalf("zero-value Folder.Git = %v, want GitUnknown", (graph.Folder{}).Git)
+	}
+
+	t.Run("clean manual folder is GitNone", func(t *testing.T) {
+		h := testsupport.NewHome(t)
+		h.WriteFile(".claude/skills/humanizer/SKILL.md", graphtest.SkillMD("humanizer", "manual"))
+		g := build(t, h, nil, nil)
+		f := folderByEntry(t, g, h.Path(".claude/skills/humanizer"))
+		if f.Git != graph.GitNone {
+			t.Errorf("Git = %v, want GitNone", f.Git)
+		}
+	})
+
+	t.Run(".git marker file at folder is GitPresent", func(t *testing.T) {
+		h := testsupport.NewHome(t)
+		h.WriteFile(".claude/skills/wt-skill/SKILL.md", graphtest.SkillMD("wt-skill", "worktree"))
+		h.WriteFile(".claude/skills/wt-skill/.git", "gitdir: /some/repo/.git/worktrees/wt-skill\n")
+		g := build(t, h, nil, nil)
+		f := folderByEntry(t, g, h.Path(".claude/skills/wt-skill"))
+		if f.Git != graph.GitPresent {
+			t.Errorf("Git = %v, want GitPresent", f.Git)
+		}
+	})
+
+	t.Run(".git marker at configured root is GitPresent", func(t *testing.T) {
+		h := testsupport.NewHome(t)
+		h.WriteFile(".claude/skills/root-skill/SKILL.md", graphtest.SkillMD("root-skill", "under git root"))
+		h.WriteFile(".claude/skills/.git", "gitdir: ../../.git/modules/skills\n")
+		g := build(t, h, nil, nil)
+		f := folderByEntry(t, g, h.Path(".claude/skills/root-skill"))
+		if f.Git != graph.GitPresent {
+			t.Errorf("Git = %v, want GitPresent", f.Git)
+		}
+	})
+
+	t.Run(".git at resolved ancestor of symlinked root is GitPresent", func(t *testing.T) {
+		h := testsupport.NewHome(t)
+		h.WriteFile("dotfiles/claude/skills/linked-skill/SKILL.md", graphtest.SkillMD("linked-skill", "in dotfiles"))
+		h.Mkdir("dotfiles/.git/objects")
+		h.Symlink(".claude/skills", h.Path("dotfiles/claude/skills"))
+		g := build(t, h, nil, nil)
+		f := folderByEntry(t, g, h.Path(".claude/skills/linked-skill"))
+		if f.Git != graph.GitPresent {
+			t.Errorf("Git = %v, want GitPresent", f.Git)
+		}
+	})
+
+	t.Run("nested .git inside folder is GitPresent", func(t *testing.T) {
+		h := testsupport.NewHome(t)
+		h.WriteFile(".claude/skills/nested-skill/SKILL.md", graphtest.SkillMD("nested-skill", "nested git"))
+		h.Mkdir(".claude/skills/nested-skill/vendor/sub/.git/objects")
+		g := build(t, h, nil, nil)
+		f := folderByEntry(t, g, h.Path(".claude/skills/nested-skill"))
+		if f.Git != graph.GitPresent {
+			t.Errorf("Git = %v, want GitPresent", f.Git)
+		}
+	})
+
+	t.Run("incomplete Exists check yields GitUnknown", func(t *testing.T) {
+		h := testsupport.NewHome(t)
+		h.WriteFile(".claude/skills/manual-skill/SKILL.md", graphtest.SkillMD("manual-skill", "manual"))
+		realFiles := fsadapter.NewFileOps(h.Paths().Guard())
+		files := &fakes.FailingFileOps{
+			Inner: realFiles,
+			Fail: func(c fakes.Call) error {
+				if c.Op == "Exists" && len(c.Args) > 0 && filepath.Base(c.Args[0]) == ".git" {
+					return errors.New("permission denied")
+				}
+				return nil
+			},
+		}
+		dirs := fsadapter.NewScanner(h.Paths().Guard())
+		harnesses, err := data.LoadHarnesses(h.Paths(), realFiles)
+		if err != nil {
+			t.Fatal(err)
+		}
+		profiles, err := data.DiagnosticProfiles()
+		if err != nil {
+			t.Fatal(err)
+		}
+		g, err := graph.Build(graph.Deps{
+			Paths: h.Paths(), Harnesses: harnesses, Profiles: profiles,
+			Dirs: dirs, Files: files, Links: osLinks{},
+		})
+		if err != nil {
+			t.Fatalf("graph.Build() error = %v", err)
+		}
+		f := folderByEntry(t, g, h.Path(".claude/skills/manual-skill"))
+		if f.Git != graph.GitUnknown {
+			t.Errorf("Git = %v, want GitUnknown", f.Git)
+		}
+	})
+
+	t.Run("incomplete nested Scan yields GitUnknown", func(t *testing.T) {
+		h := testsupport.NewHome(t)
+		h.WriteFile(".claude/skills/manual-skill/SKILL.md", graphtest.SkillMD("manual-skill", "manual"))
+		h.Mkdir(".claude/skills/manual-skill/sub")
+		files := fsadapter.NewFileOps(h.Paths().Guard())
+		realDirs := fsadapter.NewScanner(h.Paths().Guard())
+		dirs := failingGitDirs{
+			inner:   realDirs,
+			failDir: real(t, h, ".claude/skills/manual-skill/sub"),
+			err:     errors.New("unreadable"),
+		}
+		harnesses, err := data.LoadHarnesses(h.Paths(), files)
+		if err != nil {
+			t.Fatal(err)
+		}
+		profiles, err := data.DiagnosticProfiles()
+		if err != nil {
+			t.Fatal(err)
+		}
+		g, err := graph.Build(graph.Deps{
+			Paths: h.Paths(), Harnesses: harnesses, Profiles: profiles,
+			Dirs: dirs, Files: files, Links: osLinks{},
+		})
+		if err != nil {
+			t.Fatalf("graph.Build() error = %v", err)
+		}
+		f := folderByEntry(t, g, h.Path(".claude/skills/manual-skill"))
+		if f.Git != graph.GitUnknown {
+			t.Errorf("Git = %v, want GitUnknown", f.Git)
+		}
+	})
+
+	t.Run("nested tree deeper than maxWalk yields GitUnknown", func(t *testing.T) {
+		h := testsupport.NewHome(t)
+		h.WriteFile(".claude/skills/deep-skill/SKILL.md", graphtest.SkillMD("deep-skill", "deep"))
+		deep := ".claude/skills/deep-skill"
+		for range 17 {
+			deep = filepath.Join(deep, "d")
+		}
+		h.Mkdir(deep)
+		g := build(t, h, nil, nil)
+		f := folderByEntry(t, g, h.Path(".claude/skills/deep-skill"))
+		if f.Git != graph.GitUnknown {
+			t.Errorf("Git = %v, want GitUnknown", f.Git)
+		}
+	})
 }

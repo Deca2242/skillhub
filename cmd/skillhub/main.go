@@ -95,6 +95,10 @@ func composeWith(newRunner func(paths.Paths) ports.ProcessRunner) (*app.App, err
 	if err != nil {
 		return nil, fmt.Errorf("prepare the website reader: %w", err)
 	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		cwd = ""
+	}
 	return app.New(app.Deps{
 		Paths:       p,
 		Agents:      agents,
@@ -112,6 +116,8 @@ func composeWith(newRunner func(paths.Paths) ports.ProcessRunner) (*app.App, err
 		Clock:       clock.System{},
 		Catalog:     catalogFor(runner, os.Getenv),
 		Web:         web,
+		ProjectDir:  cwd,
+		Project:     fsadapter.NewProjectOps(p.Guard()),
 	})
 }
 

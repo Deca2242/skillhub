@@ -5,26 +5,26 @@ Visibles: 14 · sin agente: 3 (4 desactivadas visibles, 2 activas sin agente)
 │ Skills (17)                          ││ accessibility
 │ ⚠ accessibility          enlace roto ││ La desactivaste a mano moviéndola a OFF/, pero Codex,
 │ ● agent-browser          sin revisar ││ OpenCode y Pi la siguen viendo porque buscan en
-│ ⚠ brainstorming        sin gestionar ││ subcarpetas.
+│ ⚠ brainstorming               manual ││ subcarpetas.
 │ ⚠ computer-use            modificada ││ Recomendado: [o] Desactivarla de verdad
 │ ⚠ domain-driven-design   enlace roto ││
 │ ● find-skills            sin revisar ││ accessibility
-│ ⚠ git-guardrails-clau…   enlace roto ││
+│ ⚠ git-guardrails-claude… enlace roto ││
 │ ● grill-me               sin revisar ││ En skillhub: desactivada (a mano en OFF/)
 │ ● grill-with-docs        sin revisar ││ Disponible en: Codex, OpenCode y Pi
-│ ⚠ humanizer            sin gestionar ││   Codex, OpenCode y Pi: directamente, sin enlace
-│ ⚠ i-have-adhd          sin gestionar ││ Origen: owner/accessibility
-│ ● karpathy-guidelines    sin revisar ││ Tiene un enlace que no lleva a ninguna parte.
+│ ⚠ humanizer                   manual ││   Codex, OpenCode y Pi: directamente, sin enlace
+│ ⚠ i-have-adhd                 manual ││ Origen: owner/accessibility
+│ ● karpathy-guidelines      proveedor ││ Tiene un enlace que no lleva a ninguna parte.
 │ ⚠ orca-cli                modificada ││ Desactivarla de verdad la guarda aparte, donde ningún
 │ ⚠ orchestration           modificada ││ agente la ve, junto con las otras 3 skills de OFF/
-│ ⚠ requirements-elicit… sin gestionar ││ (domain-driven-design, git-guardrails-claude-code y web-
+│ ⚠ requirements-elicitat…      manual ││ (domain-driven-design, git-guardrails-claude-code y web-
 │ ⚠ web-quality-audit      enlace roto ││ quality-audit).
 │ ○ archify                desactivada ││ También borra sus 6 enlaces rotos.
 │                                      ││ Actividad en skillhub: sin actividad registrada
 │                                      ││
-│                                      ││ [x] Ignorar   [enter] Ver todo
-│                                      ││
+│                                      ││ [e] Eliminar   [x] Ignorar
+│                                      ││ [enter] Ver todo
 │                                      ││
 ╰──────────────────────────────────────╯╰──────────────────────────────────────────────────────────╯
-o desactivarla de verdad • enter ver todo • x ignorar • / buscar • f filtrar • g ver por agente • ?
-ayuda • q salir
+o desactivarla de verdad • e eliminar • enter ver todo • x ignorar • / buscar • f filtrar • g ver
+por agente • ? ayuda • q salir

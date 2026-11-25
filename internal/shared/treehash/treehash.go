@@ -81,6 +81,35 @@ func BlobSHA(content []byte) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
+// Reader provides read-only relative directory traversal and file reading for
+// computing a git tree object without symlinks or .git entries.
+type Reader interface {
+	Stat(name string) (fs.FileInfo, error)
+	ReadDir(name string) ([]fs.DirEntry, error)
+	ReadFile(name string) ([]byte, error)
+}
+
+// Hash hashes the directory exposed through r as git would for a regular-file
+// skill tree. Unlike Dir, it rejects .git entries and symlinks with
+// ErrUnsupportedEntry so descriptor-bound readers cannot silently skip them.
+func Hash(r Reader) (Tree, error) {
+	if r == nil {
+		return Tree{}, fmt.Errorf("hash: %w: nil reader", ErrUnsupportedEntry)
+	}
+	info, err := r.Stat(".")
+	if err != nil {
+		return Tree{}, fmt.Errorf("hash .: %w", err)
+	}
+	if !info.IsDir() || info.Mode()&fs.ModeSymlink != 0 {
+		return Tree{}, fmt.Errorf("hash .: %w: not a directory", ErrUnsupportedEntry)
+	}
+	sha, nodes, err := hashReaderDir(r, ".")
+	if err != nil {
+		return Tree{}, err
+	}
+	return Tree{SHA: sha, Nodes: nodes}, nil
+}
+
 // Dir hashes the folder root as git would. A symlink as root is followed;
 // symlinks below it are hashed as links.
 func Dir(root string) (Tree, error) {
@@ -128,6 +157,10 @@ func hashDir(abs, rel string) (string, []Node, error) {
 			items = append(items, it)
 		}
 	}
+	return serializeTree(abs, items)
+}
+
+func serializeTree(label string, items []item) (string, []Node, error) {
 	// git sorts a tree's entries by name, comparing a subtree as if its
 	// name ended in "/".
 	slices.SortFunc(items, func(a, b item) int {
@@ -139,7 +172,7 @@ func hashDir(abs, rel string) (string, []Node, error) {
 	for _, it := range items {
 		raw, err := hex.DecodeString(it.node.SHA)
 		if err != nil {
-			return "", nil, fmt.Errorf("hash %s: %w", abs, err)
+			return "", nil, fmt.Errorf("hash %s: %w", label, err)
 		}
 		object.WriteString(it.node.Mode.objectMode())
 		object.WriteByte(' ')
@@ -152,6 +185,77 @@ func hashDir(abs, rel string) (string, []Node, error) {
 	h := newObjectHash("tree", int64(object.Len()))
 	h.Write(object.Bytes())
 	return hex.EncodeToString(h.Sum(nil)), nodes, nil
+}
+
+func hashReaderDir(r Reader, relDir string) (string, []Node, error) {
+	entries, err := r.ReadDir(relDir)
+	if err != nil {
+		return "", nil, fmt.Errorf("hash %s: %w", relDir, err)
+	}
+	items := make([]item, 0, len(entries))
+	for _, entry := range entries {
+		name := entry.Name()
+		if name == ".git" {
+			return "", nil, fmt.Errorf("hash %s: %w: .git entry %q", relDir, ErrUnsupportedEntry, name)
+		}
+		childRel := name
+		if relDir != "." {
+			childRel = path.Join(relDir, name)
+		}
+		it, keep, err := hashReaderEntry(r, childRel, entry)
+		if err != nil {
+			return "", nil, err
+		}
+		if keep {
+			it.name = name
+			items = append(items, it)
+		}
+	}
+	return serializeTree(relDir, items)
+}
+
+func hashReaderEntry(r Reader, rel string, entry fs.DirEntry) (item, bool, error) {
+	if entry.Type()&fs.ModeSymlink != 0 {
+		return item{}, false, fmt.Errorf("hash %s: %w: symlink", rel, ErrUnsupportedEntry)
+	}
+	info, err := entry.Info()
+	if err != nil {
+		return item{}, false, fmt.Errorf("hash %s: %w", rel, err)
+	}
+	mode := info.Mode()
+	switch {
+	case mode&fs.ModeSymlink != 0:
+		return item{}, false, fmt.Errorf("hash %s: %w: symlink", rel, ErrUnsupportedEntry)
+	case mode.IsDir():
+		sha, below, err := hashReaderDir(r, rel)
+		if err != nil {
+			return item{}, false, err
+		}
+		if len(below) == 0 {
+			return item{}, false, nil
+		}
+		return item{node: Node{Path: rel, Mode: ModeTree, SHA: sha}, below: below}, true, nil
+	case mode.IsRegular():
+		data, err := r.ReadFile(rel)
+		if err != nil {
+			return item{}, false, fmt.Errorf("hash %s: %w", rel, err)
+		}
+		if int64(len(data)) != info.Size() {
+			return item{}, false, fmt.Errorf(
+				"hash %s: the file changed size while it was read (%d, then %d bytes)",
+				rel,
+				info.Size(),
+				len(data),
+			)
+		}
+		fileMode := ModeFile
+		if mode.Perm()&0o100 != 0 {
+			fileMode = ModeExecutable
+		}
+		return item{node: Node{Path: rel, Mode: fileMode, SHA: BlobSHA(data), Size: int64(len(data))}}, true, nil
+	default:
+		return item{}, false, fmt.Errorf("hash %s: %w: %s", rel, ErrUnsupportedEntry, mode.Type())
+	}
 }
 
 func sortKey(it item) []byte {

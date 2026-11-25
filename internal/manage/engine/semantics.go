@@ -56,6 +56,14 @@ func (s Step) semantics() error {
 		if pre.State != StateAbsent || post.State != StateTree {
 			return bad("%s -> %s does not restore a folder", pre.describe(), post.describe())
 		}
+	case StepRemoveClone:
+		if pre.State != StateClone || post.State != StateAbsent {
+			return bad("%s -> %s does not remove a clone", pre.describe(), post.describe())
+		}
+	case StepRestoreClone:
+		if pre.State != StateAbsent || post.State != StateClone {
+			return bad("%s -> %s does not restore a clone", pre.describe(), post.describe())
+		}
 	case StepLockPark:
 		if pre.State != StateEntry || post.State != StateAbsent {
 			return bad("%s -> %s does not take an entry out", pre.describe(), post.describe())
@@ -135,22 +143,24 @@ func (i Image) clean() error {
 	var ok bool
 	switch i.State {
 	case StateAbsent:
-		ok = i.TreeSHA == "" && i.Target == "" && i.Raw == nil
+		ok = i.TreeSHA == "" && i.CloneSHA == "" && i.Target == "" && i.Raw == nil
 	case StateTree:
-		ok = !isEntry && i.TreeSHA != "" && i.Target == "" && i.Raw == nil
+		ok = !isEntry && i.TreeSHA != "" && i.CloneSHA == "" && i.Target == "" && i.Raw == nil
+	case StateClone:
+		ok = !isEntry && i.TreeSHA == "" && validSHA256(i.CloneSHA) && i.Target == "" && i.Raw == nil
 	case StateLink:
-		ok = !isEntry && i.TreeSHA == "" && validText(i.Target) && i.Raw == nil
+		ok = !isEntry && i.TreeSHA == "" && i.CloneSHA == "" && validText(i.Target) && i.Raw == nil
 	case StateEntry:
-		ok = isEntry && i.TreeSHA == "" && i.Target == "" && len(i.Raw) > 0
+		ok = isEntry && i.TreeSHA == "" && i.CloneSHA == "" && i.Target == "" && len(i.Raw) > 0
 	case StateNoLock:
-		ok = isEntry && i.TreeSHA == "" && i.Target == "" && i.Raw == nil
+		ok = isEntry && i.TreeSHA == "" && i.CloneSHA == "" && i.Target == "" && i.Raw == nil
 	default:
 		// StateOther is only ever observed, never planned.
 		ok = false
 	}
 	if !ok {
-		return fmt.Errorf("a %s image of %s with tree %q, target %q and %d raw bytes",
-			i.State, i.object(), i.TreeSHA, i.Target, len(i.Raw))
+		return fmt.Errorf("a %s image of %s with tree %q, clone %q, target %q and %d raw bytes",
+			i.State, i.object(), i.TreeSHA, i.CloneSHA, i.Target, len(i.Raw))
 	}
 	return nil
 }
@@ -159,17 +169,19 @@ func (i Image) clean() error {
 // nothing in a record is silently ignored.
 func (s Step) unusedFields() error {
 	used := map[StepKind][]string{
-		StepMove:        {"src", "dst"},
-		StepLink:        {"path", "target"},
-		StepUnlink:      {"path", "target"},
-		StepRemoveTree:  {"path"},
-		StepRequire:     {"path"},
-		StepRestoreTree: {"path", "src"},
-		StepLockPark:    {"name"},
-		StepLockUnpark:  {"entry"},
-		StepLockAdd:     {"name", "raw"},
-		StepLockRemove:  {"name", "raw"},
-		StepLockReplace: {"name", "raw"},
+		StepMove:         {"src", "dst"},
+		StepLink:         {"path", "target"},
+		StepUnlink:       {"path", "target"},
+		StepRemoveTree:   {"path"},
+		StepRequire:      {"path"},
+		StepRestoreTree:  {"path", "src"},
+		StepRemoveClone:  {"path"},
+		StepRestoreClone: {"path", "src"},
+		StepLockPark:     {"name"},
+		StepLockUnpark:   {"entry"},
+		StepLockAdd:      {"name", "raw"},
+		StepLockRemove:   {"name", "raw"},
+		StepLockReplace:  {"name", "raw"},
 	}[s.Kind]
 	fields := []struct {
 		name string

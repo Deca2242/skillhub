@@ -23,8 +23,8 @@ Búsqueda: git-guardrails-claude-code
 │                                      ││ También borra sus 3 enlaces rotos.
 │                                      ││ Actividad en skillhub: sin actividad registrada
 │                                      ││
-│                                      ││ [x] Ignorar   [enter] Ver todo
-│                                      ││
+│                                      ││ [e] Eliminar   [x] Ignorar
+│                                      ││ [enter] Ver todo
 ╰──────────────────────────────────────╯╰──────────────────────────────────────────────────────────╯
-o desactivarla de verdad • enter ver todo • x ignorar • / buscar • f filtrar • g ver por agente • ?
-ayuda • q salir
+o desactivarla de verdad • e eliminar • enter ver todo • x ignorar • / buscar • f filtrar • g ver
+por agente • ? ayuda • q salir

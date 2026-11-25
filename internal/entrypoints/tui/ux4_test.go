@@ -280,7 +280,8 @@ func TestSkillsIgnoredFilterAndXStopsIgnoring(t *testing.T) {
 	}
 }
 
-// The write keys of a skill do nothing on an ignored row: x comes first.
+// On an ignored row, non-removal write keys require x first; e still opens
+// reversible removal confirmation while keeping the ignore preference.
 func TestAnIgnoredRowOffersOnlyX(t *testing.T) {
 	mc := newMachine(t)
 	a := mc.newApp()
@@ -290,7 +291,7 @@ func TestAnIgnoredRowOffersOnlyX(t *testing.T) {
 		pressRun(m, "f")
 	}
 	before := mc.hash()
-	for _, k := range []string{"d", "e", "l", "o", "p"} {
+	for _, k := range []string{"d", "l", "o", "p"} {
 		pressRun(m, k)
 		if m.InPlanForTest() || mc.hash() != before {
 			t.Fatalf("%s on an ignored row planned or wrote:\n%s", k, screen(m))
@@ -298,6 +299,14 @@ func TestAnIgnoredRowOffersOnlyX(t *testing.T) {
 		if want := "grill-with-docs está ignorada: pulsa x para dejar de ignorarla."; m.StatusForTest() != want {
 			t.Errorf("%s: status = %q, want %q", k, m.StatusForTest(), want)
 		}
+	}
+	pressRun(m, "e")
+	if !m.InPlanForTest() {
+		t.Fatalf("e on an ignored row did not open removal confirmation; status %q", m.StatusForTest())
+	}
+	pressRun(m, "n")
+	if mc.hash() != before {
+		t.Fatal("cancelling removal on an ignored row wrote something")
 	}
 	pressRun(m, "enter")
 	if !strings.Contains(screen(m), "Skill: grill-with-docs") {

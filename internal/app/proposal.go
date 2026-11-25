@@ -179,7 +179,12 @@ type TogglePreview struct {
 // RemovePreview is a remove plan.
 type RemovePreview struct {
 	Key         string
+	Project     bool
+	ProjectDir  string
+	ProjectRoot string
+	SkillName   string
 	Parked      bool
+	Off         bool
 	Folder      string
 	TreeSHA     string
 	Links       []LinkChange

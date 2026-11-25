@@ -25,6 +25,7 @@ func TestThePanelOfAnOFFSkillExplainsItAndOffersAdoptingIt(t *testing.T) {
 		"La desactivaste a mano moviéndola a OFF/, pero Codex, OpenCode y Pi la siguen viendo porque buscan en",
 		"Disponible en: Codex, OpenCode y Pi",
 		text.TUIActionAdoptOff,
+		text.TUIActionRemove,
 		"junto con las otras 3 skills de OFF/",
 		"También borra sus 3 enlaces rotos.",
 	} {
@@ -32,13 +33,13 @@ func TestThePanelOfAnOFFSkillExplainsItAndOffersAdoptingIt(t *testing.T) {
 			t.Errorf("the panel lacks %q:\n%s", want, got)
 		}
 	}
-	for _, unwanted := range []string{text.TUIActionDisable, text.TUIActionRemove, text.TUIActionAgents, text.TUIActionFixLink, "Cursor"} {
+	for _, unwanted := range []string{text.TUIActionDisable, text.TUIActionAgents, text.TUIActionFixLink, "Cursor"} {
 		if strings.Contains(got, unwanted) {
 			t.Errorf("the panel offers %q:\n%s", unwanted, got)
 		}
 	}
-	if keys := m.OfferedKeysForTest(); !slices.Equal(keys, []string{"o", "enter"}) {
-		t.Errorf("offered keys = %v, want [o enter]", keys)
+	if keys := m.OfferedKeysForTest(); !slices.Equal(keys, []string{"o", "e", "enter"}) {
+		t.Errorf("offered keys = %v, want [o e enter]", keys)
 	}
 
 	// d is not planned: the status says why, in plain words, and nothing
@@ -120,11 +121,11 @@ func TestAKeyThatDoesNotApplyIsToldPlainly(t *testing.T) {
 	mc := newMachine(t)
 	m := open(t, mc.newApp())
 	selectSkill(t, m, "humanizer")
-	pressRun(m, "e")
+	pressRun(m, "d")
 	if m.InPlanForTest() {
-		t.Fatal("e planned the removal of a skill outside the store")
+		t.Fatal("d planned disabling a skill outside the store")
 	}
-	want := "Esta skill no está en el almacén de skillhub, así que no se puede eliminar desde aquí. Mira Salud (4) para ver cómo ordenarla."
+	want := "Esta skill no está en el almacén de skillhub, así que no se puede desactivar desde aquí. Mira Salud (4) para ver cómo ordenarla."
 	if got := m.StatusForTest(); got != want {
 		t.Errorf("status = %q, want %q", got, want)
 	}
