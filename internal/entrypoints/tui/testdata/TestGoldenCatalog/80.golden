@@ -1,0 +1,30 @@
+skillhub   1 Skills (17)  2 Actualizar  3 Instalar  4 Salud (26) 
+Populares en skills.sh (4)
+╭──────────────────────────────────────────────────────────────────────────────╮
+│ Resultados                                                                   │
+│ ⚠ agent-browser                                                       12 345 │
+│ ● ui-taste                                                              4389 │
+│ ● agent-browser                                                    instalada │
+│ ○ unsupported                                                  no instalable │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭──────────────────────────────────────────────────────────────────────────────╮
+│ agent-browser                                                                │
+│ posible duplicado (agent-browser, de owner/agent-browser)                    │
+│ Origen: acme/tools                                                           │
+│ Instalaciones: 12 345                                                        │
+│ Para instalar: acme/tools@agent-browser                                      │
+│ [/] Buscar   [o] Escribir origen                                             │
+│ [u] Recargar catálogo   [enter] Instalar                                     │
+╰──────────────────────────────────────────────────────────────────────────────╯
+/ buscar • o escribir origen • u recargar catálogo • enter instalar • esc       
+cancelar • ? ayuda • q salir                                                    

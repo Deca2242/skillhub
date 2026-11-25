@@ -79,7 +79,7 @@ ayuda con `--help`.
 | Saber si hay actualizaciones y aplicarlas | pestaña **2 Actualizar**: `enter` muestra los cambios y `a` aplica; `r` revisa ahora | `skillhub check` y `skillhub updates` |
 | Instalar, activar, desactivar, enlazar o eliminar una skill | pestaña **1 Skills** (`d` desactiva, `a` activa, `e` elimina, `l` elige agentes) y pestaña **3 Instalar** | `skillhub skills` |
 | Encontrar y reparar enlaces rotos y duplicados | pestaña **4 Salud**: `enter` muestra cómo repararlo | `skillhub doctor` y `skillhub doctor fix` |
-| Buscar skills en skills.sh, el catálogo público | no está en la interfaz | `skillhub skills search` y `skillhub skills popular` |
+| Buscar skills en skills.sh, el catálogo público | `3 Instalar`: populares y búsqueda con `/` | `skillhub skills search` y `skillhub skills popular` |
 | Ver lo que se hizo y deshacerlo | `h` abre el Historial; `z` deshace lo último | `skillhub history` y `skillhub undo` |
 | Recibir un aviso cuando haya actualizaciones | `c` abre los Ajustes, que dicen si está activa | `skillhub background enable` (opcional) |
 
@@ -488,9 +488,13 @@ destino que no lee el almacén directamente la ve por un enlace simbólico.
   tuya) y `◆ revisar` (permisos de ejecución o texto sospechoso). `enter` muestra los cambios, `a` aplica
   esta, `o` omite esta versión y `t` aplica todas, una por una y sin las modificadas por ti ni las
   bloqueadas.
-- **Instalar:** cuatro pasos, y dice en cuál estás: (1) de dónde la traigo, de GitHub (`owner/repo…`) o
-  de un sitio web que publica skills (`https://sitio[/ruta][@skill]`); (2) revisa lo que trae, con el
-  semáforo, los archivos y el diff; (3) elige los agentes con casillas; (4) confirma.
+- **Instalar:** muestra las skills populares de skills.sh al abrir la pestaña. Pulsa `/` para buscar,
+  `esc` para volver a las populares o `u` para recargar el catálogo. La ficha muestra el origen, las
+  instalaciones y si la skill ya está instalada o podría ser un duplicado. Con `enter` eliges un
+  resultado para revisar. También puedes pulsar `o` y escribir un origen de GitHub (`owner/repo…`)
+  o de un sitio web (`https://sitio[/ruta][@skill]`), aunque el catálogo no esté disponible. Tanto
+  desde el catálogo como desde un origen escrito, primero revisas el contenido y sus cambios, luego
+  eliges los agentes con casillas y solo se instala si confirmas el plan.
 - **Salud:** los hallazgos se agrupan por skill; los que no tienen una skill asociada aparecen aparte.
   Cada hallazgo explica el problema y, cuando corresponde, propone una reparación. Las copias de
   gentle-ai se resumen en una sola línea, porque skillhub no las toca. `enter` muestra cómo reparar el

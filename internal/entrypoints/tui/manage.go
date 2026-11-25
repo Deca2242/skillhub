@@ -506,12 +506,19 @@ func (m *Model) undoManaged(row HistoryRow) tea.Cmd {
 
 // handleInstallKey handles the Install screen outside its prompts.
 func (m *Model) handleInstallKey(k string) (tea.Model, tea.Cmd) {
+	if m.app.HasCatalog() {
+		return m, m.handleCatalogKey(k)
+	}
 	if k == "enter" && !m.busy {
-		m.v2.source.SetValue("")
-		m.v2.source.Focus()
-		m.mode = modeInstallSource
+		m.openInstallSource()
 	}
 	return m, nil
+}
+
+func (m *Model) openInstallSource() {
+	m.v2.source.SetValue("")
+	m.v2.source.Focus()
+	m.mode = modeInstallSource
 }
 
 func (m *Model) handleInstallInputKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {

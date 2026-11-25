@@ -53,6 +53,17 @@ func ids(entries []app.CatalogEntry) []string {
 	return out
 }
 
+func TestHasCatalogReportsWhetherThePortIsConfigured(t *testing.T) {
+	f := newFixture(t)
+	var noApp *app.App
+	if noApp.HasCatalog() || f.app.HasCatalog() {
+		t.Error("HasCatalog reported an unconfigured catalog")
+	}
+	if !f.withCatalog(fakes.NewCatalog()).HasCatalog() {
+		t.Error("HasCatalog did not report a configured catalog")
+	}
+}
+
 func TestCatalogNeedsTheCatalogPort(t *testing.T) {
 	f := newFixture(t)
 	if _, err := f.app.SearchCatalog(t.Context(), "react", 10, app.CatalogOptions{}); !errors.Is(err, app.ErrMissingDependency) {

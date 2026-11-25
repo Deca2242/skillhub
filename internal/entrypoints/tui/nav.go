@@ -64,7 +64,7 @@ func (m *Model) handleNavKey(k string) tea.Cmd {
 	case "z":
 		return m.undoLast()
 	}
-	return nil
+	return m.loadCatalogOnEntry()
 }
 
 // undoLast opens the undo of the last operation of the session, with its

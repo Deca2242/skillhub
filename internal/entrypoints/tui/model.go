@@ -40,6 +40,7 @@ const (
 	// The version 2 modes (manage.go).
 	modePrompt
 	modePlan
+	modeCatalogSearch
 	modeInstallSource
 	modeInstallReview
 	modeInstallTargets
@@ -228,6 +229,18 @@ type Model struct {
 	ignored  []app.IgnoredSkill
 	unignore checks
 
+	// Catalog reads have their own lifetime, separate from install and plan requests.
+	catalogInput   textinput.Model
+	catalogQuery   string
+	catalogResult  app.CatalogResult
+	catalogErr     error
+	catalogSeq     int
+	catalogLoaded  bool
+	catalogLoading bool
+	catalogCursor  int
+	catalogTop     int
+	catalogPage    int
+
 	v2 manage
 }
 
@@ -260,6 +273,7 @@ func NewModel(a *app.App) *Model {
 		historyTable:  hiTable,
 		filterInput:   fi,
 		intervalInput: ii,
+		catalogInput:  newCatalogInput(),
 		diffViewport:  vp,
 		v2:            newManage(),
 		health:        -1,
@@ -301,9 +315,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// asks every planner, and the list need not wait for it.
 			m.actionsSeq++
 			m.actionsPending = true
-			cmd = tea.Batch(cmd, actionsCmd(m.app, m.actionsSeq))
+			cmd = tea.Batch(cmd, actionsCmd(m.app, m.actionsSeq), m.catalogAfterDataLoad())
 		}
 		return m, cmd
+
+	case catalogLoadedMsg:
+		m.handleCatalogLoaded(msg)
+		return m, nil
 
 	case actionsLoadedMsg:
 		if msg.seq == m.actionsSeq {
@@ -580,6 +598,8 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.handlePromptKey(msg)
 	case modePlan:
 		return m.handlePlanKey(k, msg)
+	case modeCatalogSearch:
+		return m.handleCatalogSearchKey(msg)
 	case modeInstallSource, modeInstallTargets:
 		return m.handleInstallInputKey(msg)
 	case modeInstallReview:
@@ -611,7 +631,7 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case "esc":
 		if m.screen == ScreenHistory || m.screen == ScreenSettings {
 			m.screen = m.back
-			return m, nil
+			return m, m.loadCatalogOnEntry()
 		}
 	case "r":
 		if m.loaded && !m.busy {
@@ -1110,7 +1130,11 @@ func targetName(target string) string {
 
 // helpLines are the lines of the help: one per screen, so that a letter
 // means one thing in each.
-func helpLines() []string {
+func (m *Model) helpLines() []string {
+	install := text.TUIHelpInstall
+	if m.app.HasCatalog() {
+		install = text.TUIHelpInstallCatalog
+	}
 	return []string{
 		msgHelpTitle,
 		"",
@@ -1121,7 +1145,7 @@ func helpLines() []string {
 		text.TUISkillsExclusions,
 		text.TUIHelpUpdates,
 		text.TUIHelpDiff,
-		text.TUIHelpInstall,
+		install,
 		text.TUIHelpDoctor,
 		text.TUIHelpHistory,
 		text.TUIHelpSetting,
@@ -1135,7 +1159,7 @@ func helpLines() []string {
 func (m *Model) layoutHelp() {
 	boxW := max(20, m.width)
 	inner := max(10, boxW-4) // the frame's border and padding
-	wrapped := lipgloss.NewStyle().Width(inner).Render(strings.Join(helpLines(), "\n"))
+	wrapped := lipgloss.NewStyle().Width(inner).Render(strings.Join(m.helpLines(), "\n"))
 	footer := lipgloss.Height(m.renderFooter())
 	// header, frame border, and the footer
 	room := m.height - 1 - 2 - footer
@@ -1153,7 +1177,7 @@ func (m *Model) renderHelp(boxW int) string {
 		return m.styles.frame.Width(boxW).Render(m.v2.help.View()) + "\n" +
 			m.styles.muted.Width(boxW).Render(text.TUIHelpScroll)
 	}
-	return m.styles.frame.Width(boxW).Render(strings.Join(helpLines(), "\n"))
+	return m.styles.frame.Width(boxW).Render(strings.Join(m.helpLines(), "\n"))
 }
 
 func (m *Model) renderFooter() string {
@@ -1168,6 +1192,8 @@ func (m *Model) renderFooter() string {
 		keys = text.TUIConfirmFooterShort
 	case modeNormal, modeFilter, modeEditInterval:
 		keys = m.screenKeys()
+	case modeCatalogSearch:
+		keys = text.TUICatalogSearchKeys
 	case modeSkillDetail:
 		keys = text.TUIKeysSkillDetail
 		if _, _, ok := m.homonymPair(m.selectedSk.ID); ok {
@@ -1209,6 +1235,12 @@ func (m *Model) screenKeys() string {
 	case ScreenSettings:
 		return m.settingsKeys()
 	case ScreenInstall:
+		if m.app.HasCatalog() {
+			if entry, ok := m.selectedCatalogEntry(); ok && entry.Installable && !entry.Installed {
+				return text.TUICatalogFooterInstall
+			}
+			return text.TUICatalogFooter
+		}
 		return text.TUIKeysInstallStart
 	case ScreenDoctor:
 		return m.doctorKeys()

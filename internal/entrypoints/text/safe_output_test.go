@@ -134,6 +134,18 @@ func TestCatalogTextsEscapeThirdPartyText(t *testing.T) {
 
 	stale := text.CatalogStale(errors.New("stale"+h), time.Date(2026, 11, 22, 9, 30, 0, 0, time.UTC))
 	assertEscaped(t, "CatalogStale", stale)
+
+	for name, got := range map[string]string{
+		"query":             text.TUICatalogHeading("find"+h, 2),
+		"name":              text.TUICatalogName(entries[0]),
+		"fallback name":     text.TUICatalogName(app.CatalogEntry{SkillID: "evil" + h}),
+		"result details":    strings.Join(text.TUICatalogDetails(entries[0]), " "),
+		"installed details": strings.Join(text.TUICatalogDetails(entries[1]), " "),
+		"installed refusal": text.TUICatalogAlreadyInstalled(entries[1]),
+		"error":             text.TUICatalogError(errors.New("read" + h)),
+	} {
+		assertEscaped(t, name, got)
+	}
 }
 
 func TestTUIUpdatesUncheckedAndActivityEscapeThirdPartyText(t *testing.T) {

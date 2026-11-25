@@ -168,6 +168,9 @@ type CatalogResult struct {
 	CacheErr error
 }
 
+// HasCatalog reports whether the optional skills.sh port is configured.
+func (a *App) HasCatalog() bool { return a != nil && a.d.Catalog != nil }
+
 // SearchCatalog searches skills.sh. limit 0 or less is DefaultCatalogLimit,
 // and at most 100. Each query is cached for an hour; when skills.sh fails
 // and the cache has an older answer, that answer comes back with Stale set.

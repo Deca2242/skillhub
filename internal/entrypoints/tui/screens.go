@@ -242,8 +242,7 @@ func (m *Model) settingsKeys() string {
 	return strings.Join([]string{text.TUIKeySettingsMove, text.TUIKeySettingsChange, text.TUIKeyCheck, text.TUIKeyHelpQuit}, " • ")
 }
 
-// renderInstall is the Instalar tab. CAT2 adds the search of skills.sh
-// here, before the source; until then the tab starts at the source.
+// renderInstall shows the optional catalog or the current install step.
 func (m *Model) renderInstall(boxW int) string {
 	step := func(n int) string { return m.styles.title.Render(text.TUIInstallStep(n)) }
 	switch m.mode {
@@ -261,6 +260,9 @@ func (m *Model) renderInstall(boxW int) string {
 	case modeInstallTargets:
 		return m.styles.box.Width(boxW).Render(step(3) + "\n\n" + text.TUIChecksInstall + "\n\n" +
 			m.checkLines(m.v2.checks))
+	}
+	if m.app.HasCatalog() {
+		return m.renderCatalog(boxW)
 	}
 	return m.styles.box.Width(boxW).Render(text.TUIInstallIntro)
 }
