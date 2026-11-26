@@ -3,12 +3,12 @@ skillhub   1 Skills (17)  2 Actualizar  3 Instalar  4 Salud (26)   h historial �
 Visibles: 14 · sin agente: 3 (4 desactivadas visibles, 2 activas sin agente)
 ╭──────────────────────────────────────╮╭──────────────────────────────────────────────────────────╮
 │ Skills · desactivadas (5)            ││ accessibility
-│ ⚠ accessibility          enlace roto ││ La desactivaste a mano moviéndola a OFF/, pero Codex,
-│ ⚠ domain-driven-design   enlace roto ││ OpenCode y Pi la siguen viendo porque buscan en
-│ ⚠ git-guardrails-claude… enlace roto ││ subcarpetas.
-│ ⚠ web-quality-audit      enlace roto ││ Recomendado: [o] Desactivarla de verdad
-│ ○ archify                desactivada ││
-│                                      ││ accessibility
+│ ── Globales (5) ──                   ││ La desactivaste a mano moviéndola a OFF/, pero Codex,
+│ ⚠ accessibility          enlace roto ││ OpenCode y Pi la siguen viendo porque buscan en
+│ ⚠ domain-driven-design   enlace roto ││ subcarpetas.
+│ ⚠ git-guardrails-claude… enlace roto ││ Recomendado: [o] Desactivarla de verdad
+│ ⚠ web-quality-audit      enlace roto ││
+│ ○ archify                desactivada ││ accessibility
 │                                      ││
 │                                      ││ En skillhub: desactivada (a mano en OFF/)
 │                                      ││ Disponible en: Codex, OpenCode y Pi

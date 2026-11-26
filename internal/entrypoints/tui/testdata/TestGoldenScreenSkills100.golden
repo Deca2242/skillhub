@@ -3,24 +3,24 @@ skillhub   1 Skills (17)  2 Actualizar  3 Instalar  4 Salud (26)   h historial �
 Visibles: 15 · sin agente: 2 (4 desactivadas visibles, 2 activas sin agente)
 ╭──────────────────────────────────────╮╭──────────────────────────────────────────────────────────╮
 │ Skills (17)                          ││ agent-browser
-│ ⚠ accessibility          enlace roto ││ agent-browser
-│ ● agent-browser          sin revisar ││
-│ ● archify                sin revisar ││ En skillhub: activa
-│ ⚠ brainstorming               manual ││ Disponible en: Claude Code, Codex, Cursor, Droid, Gemini
-│ ⚠ computer-use            modificada ││ CLI, GitHub Copilot, Kilo Code, OpenCode y Pi
-│ ⚠ domain-driven-design   enlace roto ││   Codex, Gemini CLI, OpenCode y Pi: directamente, sin
-│ ● find-skills            sin revisar ││ enlace
-│ ⚠ git-guardrails-claude… enlace roto ││   Claude Code: por un enlace
-│ ● grill-me               sin revisar ││   Cursor, Droid, GitHub Copilot, Kilo Code y OpenCode:
-│ ● grill-with-docs        sin revisar ││ indeterminado (carpeta o enlaces sin verificar)
-│ ⚠ humanizer                   manual ││ Origen: owner/agent-browser
-│ ⚠ i-have-adhd                 manual ││ Actividad en skillhub: sin actividad registrada
-│ ● karpathy-guidelines      proveedor ││
-│ ⚠ orca-cli                modificada ││ [d] Desactivar   [e] Eliminar
-│ ⚠ orchestration           modificada ││ [l] Elegir agentes   [x] Ignorar
-│ ⚠ requirements-elicitat…      manual ││ [enter] Ver todo
+│ ── Globales (17) ──                  ││ agent-browser
+│ ⚠ accessibility          enlace roto ││
+│ ● agent-browser          sin revisar ││ En skillhub: activa
+│ ● archify                sin revisar ││ Disponible en: Claude Code, Codex, Cursor, Droid, Gemini
+│ ⚠ brainstorming               manual ││ CLI, GitHub Copilot, Kilo Code, OpenCode y Pi
+│ ⚠ computer-use            modificada ││   Codex, Gemini CLI, OpenCode y Pi: directamente, sin
+│ ⚠ domain-driven-design   enlace roto ││ enlace
+│ ● find-skills            sin revisar ││   Claude Code: por un enlace
+│ ⚠ git-guardrails-claude… enlace roto ││   Cursor, Droid, GitHub Copilot, Kilo Code y OpenCode:
+│ ● grill-me               sin revisar ││ indeterminado (carpeta o enlaces sin verificar)
+│ ● grill-with-docs        sin revisar ││ Origen: owner/agent-browser
+│ ⚠ humanizer                   manual ││ Actividad en skillhub: sin actividad registrada
+│ ⚠ i-have-adhd                 manual ││
+│ ● karpathy-guidelines      proveedor ││ [d] Desactivar   [e] Eliminar
+│ ⚠ orca-cli                modificada ││ [l] Elegir agentes   [x] Ignorar
+│ ⚠ orchestration           modificada ││ [enter] Ver todo
+│ ⚠ requirements-elicitat…      manual ││
 │ ⚠ web-quality-audit      enlace roto ││
-│                                      ││
 │                                      ││
 │                                      ││
 │                                      ││

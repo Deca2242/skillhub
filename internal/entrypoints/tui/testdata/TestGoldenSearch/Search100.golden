@@ -4,8 +4,8 @@ Visibles: 15 · sin agente: 2 (4 desactivadas visibles, 2 activas sin agente)
 Búsqueda: own copy
 ╭──────────────────────────────────────╮╭──────────────────────────────────────────────────────────╮
 │ Skills (1)                           ││ humanizer
-│ ⚠ humanizer                   manual ││ Coincide en: descripción
-│                                      ││ Instalación manual: skillhub no la gestiona ni la
+│ ── Globales (1) ──                   ││ Coincide en: descripción
+│ ⚠ humanizer                   manual ││ Instalación manual: skillhub no la gestiona ni la
 │                                      ││ actualiza.
 │                                      ││ Recomendado: [e] Eliminar
 │                                      ││

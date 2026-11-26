@@ -3,9 +3,9 @@ skillhub   1 Skills (15)  2 Actualizar  3 Instalar  4 Salud (26)   h historial �
 Visibles: 13 · sin agente: 2 (3 desactivadas visibles, 2 activas sin agente)
 ╭──────────────────────────────────────╮╭──────────────────────────────────────────────────────────╮
 │ Skills · ignoradas (2)               ││ domain-driven-design
-│ - domain-driven-design      ignorada ││ Ignorada: skillhub no la muestra ni la revisa.
-│ - grill-with-docs           ignorada ││
-│                                      ││ domain-driven-design
+│ ── Globales (2) ──                   ││ Ignorada: skillhub no la muestra ni la revisa.
+│ - domain-driven-design      ignorada ││
+│ - grill-with-docs           ignorada ││ domain-driven-design
 │                                      ││
 │                                      ││ En skillhub: ignorada
 │                                      ││ Disponible en: Codex, OpenCode y Pi

@@ -3,6 +3,7 @@ skillhub   1 Skills (17)  2 Actualizar  3 Instalar  4 Salud (26)
 Visibles: 15 · sin agente: 2 (4 desactivadas visibles, 2 activas sin agente)
 ╭──────────────────────────────────────────────────────────────────────────────╮
 │ Skills (17)
+│ ── Globales (17) ──
 │ ⚠ accessibility                                                  enlace roto
 │ ● agent-browser                                                  sin revisar
 │ ● archify                                                        sin revisar
@@ -12,7 +13,6 @@ Visibles: 15 · sin agente: 2 (4 desactivadas visibles, 2 activas sin agente)
 │ ● find-skills                                                    sin revisar
 │ ⚠ git-guardrails-claude-code                                     enlace roto
 │ ● grill-me                                                       sin revisar
-│ ● grill-with-docs                                                sin revisar
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭──────────────────────────────────────────────────────────────────────────────╮
 │ agent-browser

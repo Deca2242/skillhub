@@ -4,8 +4,8 @@ Visibles: 15 · sin agente: 2 (4 desactivadas visibles, 2 activas sin agente)
 Búsqueda: git-guardrails-claude-code
 ╭──────────────────────────────────────╮╭──────────────────────────────────────────────────────────╮
 │ Skills (1)                           ││ git-guardrails-claude-code
-│ ⚠ git-guardrails-claude… enlace roto ││ La desactivaste a mano moviéndola a OFF/, pero Codex,
-│                                      ││ OpenCode y Pi la siguen viendo porque buscan en
+│ ── Globales (1) ──                   ││ La desactivaste a mano moviéndola a OFF/, pero Codex,
+│ ⚠ git-guardrails-claude… enlace roto ││ OpenCode y Pi la siguen viendo porque buscan en
 │                                      ││ subcarpetas.
 │                                      ││ Recomendado: [o] Desactivarla de verdad
 │                                      ││

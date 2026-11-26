@@ -535,7 +535,7 @@ func TestThePanelStartsWithTheRecommendedStep(t *testing.T) {
 	mc.h.Symlink(".kiro/skills/agent-browser", "../../.agents/skills/old-agent-browser")
 	m := openSized(t, mc.newApp(), 140, 60)
 	selectSkill(t, m, "agent-browser")
-	got := flat(screen(m))
+	got := flatSkillPanel(screen(m))
 	if !strings.Contains(got, "Tiene un enlace roto en Kiro CLI. Recomendado: [p] Arreglar el enlace roto") {
 		t.Fatalf("the panel does not start with the broken link:\n%s", screen(m))
 	}

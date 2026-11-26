@@ -3,24 +3,24 @@ skillhub   1 Skills (17)  2 Actualizar  3 Instalar  4 Salud (26)   h historial �
 Visibles: 14 · sin agente: 3 (4 desactivadas visibles, 2 activas sin agente)
 ╭──────────────────────────────────────╮╭──────────────────────────────────────────────────────────╮
 │ Skills (17)                          ││ accessibility
-│ ⚠ accessibility          enlace roto ││ La desactivaste a mano moviéndola a OFF/, pero Codex,
-│ ● agent-browser          sin revisar ││ OpenCode y Pi la siguen viendo porque buscan en
-│ ⚠ brainstorming               manual ││ subcarpetas.
-│ ⚠ computer-use            modificada ││ Recomendado: [o] Desactivarla de verdad
-│ ⚠ domain-driven-design   enlace roto ││
-│ ● find-skills            sin revisar ││ accessibility
-│ ⚠ git-guardrails-claude… enlace roto ││
-│ ● grill-me               sin revisar ││ En skillhub: desactivada (a mano en OFF/)
-│ ● grill-with-docs        sin revisar ││ Disponible en: Codex, OpenCode y Pi
-│ ⚠ humanizer                   manual ││   Codex, OpenCode y Pi: directamente, sin enlace
-│ ⚠ i-have-adhd                 manual ││ Origen: owner/accessibility
-│ ● karpathy-guidelines      proveedor ││ Tiene un enlace que no lleva a ninguna parte.
-│ ⚠ orca-cli                modificada ││ Desactivarla de verdad la guarda aparte, donde ningún
-│ ⚠ orchestration           modificada ││ agente la ve, junto con las otras 3 skills de OFF/
-│ ⚠ requirements-elicitat…      manual ││ (domain-driven-design, git-guardrails-claude-code y web-
-│ ⚠ web-quality-audit      enlace roto ││ quality-audit).
-│ ○ archify                desactivada ││ También borra sus 6 enlaces rotos.
-│                                      ││ Actividad en skillhub: sin actividad registrada
+│ ── Globales (17) ──                  ││ La desactivaste a mano moviéndola a OFF/, pero Codex,
+│ ⚠ accessibility          enlace roto ││ OpenCode y Pi la siguen viendo porque buscan en
+│ ● agent-browser          sin revisar ││ subcarpetas.
+│ ⚠ brainstorming               manual ││ Recomendado: [o] Desactivarla de verdad
+│ ⚠ computer-use            modificada ││
+│ ⚠ domain-driven-design   enlace roto ││ accessibility
+│ ● find-skills            sin revisar ││
+│ ⚠ git-guardrails-claude… enlace roto ││ En skillhub: desactivada (a mano en OFF/)
+│ ● grill-me               sin revisar ││ Disponible en: Codex, OpenCode y Pi
+│ ● grill-with-docs        sin revisar ││   Codex, OpenCode y Pi: directamente, sin enlace
+│ ⚠ humanizer                   manual ││ Origen: owner/accessibility
+│ ⚠ i-have-adhd                 manual ││ Tiene un enlace que no lleva a ninguna parte.
+│ ● karpathy-guidelines      proveedor ││ Desactivarla de verdad la guarda aparte, donde ningún
+│ ⚠ orca-cli                modificada ││ agente la ve, junto con las otras 3 skills de OFF/
+│ ⚠ orchestration           modificada ││ (domain-driven-design, git-guardrails-claude-code y web-
+│ ⚠ requirements-elicitat…      manual ││ quality-audit).
+│ ⚠ web-quality-audit      enlace roto ││ También borra sus 6 enlaces rotos.
+│ ○ archify                desactivada ││ Actividad en skillhub: sin actividad registrada
 │                                      ││
 │                                      ││ [e] Eliminar   [x] Ignorar
 │                                      ││ [enter] Ver todo

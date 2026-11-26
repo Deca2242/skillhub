@@ -29,7 +29,7 @@ func TestThePanelOfAnOFFSkillExplainsItAndOffersAdoptingIt(t *testing.T) {
 		"junto con las otras 3 skills de OFF/",
 		"También borra sus 3 enlaces rotos.",
 	} {
-		if !strings.Contains(flat(got), flat(want)) {
+		if !strings.Contains(flatSkillPanel(got), flat(want)) {
 			t.Errorf("the panel lacks %q:\n%s", want, got)
 		}
 	}
@@ -167,7 +167,7 @@ func TestSeveralBrokenLinksSendToDoctor(t *testing.T) {
 	if !strings.Contains(got, text.TUIActionDoctor) || strings.Contains(got, text.TUIActionFixLink) {
 		t.Errorf("the panel does not send to Doctor:\n%s", got)
 	}
-	if !strings.Contains(flat(got), flat(text.TUIPanelLinksInDoctor(2))) {
+	if !strings.Contains(flatSkillPanel(got), flat(text.TUIPanelLinksInDoctor(2))) {
 		t.Errorf("the panel does not count the links:\n%s", got)
 	}
 	pressRun(m, "p")
@@ -182,6 +182,17 @@ func TestGoldenScreenOFFSkill100(t *testing.T) {
 	m := openSized(t, mc.newApp(), 100, 30)
 	selectSkill(t, m, "git-guardrails-claude-code")
 	teatest.RequireEqualOutput(t, mc.normalize(screen(m)))
+}
+
+// flatSkillPanel ignores the list when the skill panel is beside it.
+func flatSkillPanel(s string) string {
+	var lines []string
+	for line := range strings.SplitSeq(s, "\n") {
+		if _, panel, ok := strings.Cut(line, "││"); ok {
+			lines = append(lines, panel)
+		}
+	}
+	return flat(strings.Join(lines, "\n"))
 }
 
 // flat joins the lines of a wrapped panel, borders and padding out, so a

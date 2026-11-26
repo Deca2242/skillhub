@@ -1270,16 +1270,12 @@ func (m *Model) refreshTables() {
 	w := max(40, m.width)
 	m.allRows = append(PresentSkills(m.skills, ""), PresentParked(m.parked, "")...)
 	q := m.filterInput.Value()
+	globalRows := slices.Concat(PresentSkills(m.skills, q), PresentParked(m.parked, q), m.presentIgnored(q))
 	if len(m.projectSkills) == 0 {
-		m.skillRows = m.filterRows(slices.Concat(PresentSkills(m.skills, q), PresentParked(m.parked, q), m.presentIgnored(q)))
+		m.skillRows = m.filterRows(globalRows)
 	} else {
 		m.allRows = append(m.allRows, PresentProjectSkills(m.projectSkills, "")...)
-		m.skillRows = m.filterRows(slices.Concat(
-			PresentSkills(m.skills, q),
-			PresentParked(m.parked, q),
-			PresentProjectSkills(m.projectSkills, q),
-			m.presentIgnored(q),
-		))
+		m.skillRows = m.filterRows(slices.Concat(globalRows, PresentProjectSkills(m.projectSkills, q)))
 	}
 	skW := allocateColumns(w, []int{12, 12, 10, 20, 12}, []int{2, 1, 1, 3, 2})
 	m.skillsTable.SetColumns([]table.Column{

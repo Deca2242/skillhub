@@ -106,17 +106,54 @@ func (m *Model) renderSkills() string {
 		}
 		return prefix + msgNoSkills
 	}
-	items := make([]listItem, 0, len(m.skillRows))
+	var globalRows, projectRows []SkillRow
 	for _, r := range m.skillRows {
-		items = append(items, listItem{
+		if r.Project != nil {
+			projectRows = append(projectRows, r)
+		} else {
+			globalRows = append(globalRows, r)
+		}
+	}
+	items := make([]listItem, 0, len(m.skillRows)+2)
+	rowToItem := func(r SkillRow) listItem {
+		return listItem{
 			icon:  r.Kind.Icon(),
 			style: m.styles.icons[r.Kind],
 			name:  text.SafeLine(r.RawName),
 			short: m.rowShort(r),
+		}
+	}
+	if len(globalRows) > 0 {
+		items = append(items, listItem{
+			name:   fmt.Sprintf("── Globales (%d) ──", len(globalRows)),
+			header: true,
 		})
+		for _, r := range globalRows {
+			items = append(items, rowToItem(r))
+		}
+	}
+	if len(projectRows) > 0 {
+		items = append(items, listItem{
+			name:   fmt.Sprintf("── Proyecto actual (%d) ──", len(projectRows)),
+			header: true,
+		})
+		for _, r := range projectRows {
+			items = append(items, rowToItem(r))
+		}
+	}
+	tableCursor := m.skillsTable.Cursor()
+	displayCursor := tableCursor
+	if tableCursor >= 0 && tableCursor < len(m.skillRows) {
+		if tableCursor < len(globalRows) {
+			displayCursor = tableCursor + 1
+		} else if len(globalRows) > 0 {
+			displayCursor = tableCursor + 2
+		} else {
+			displayCursor = tableCursor + 1
+		}
 	}
 	list := func(width, height int) []string {
-		return m.listLines(m.listTitle(), items, m.skillsTable.Cursor(), &m.listTop, width, height)
+		return m.listLines(m.listTitle(), items, displayCursor, &m.listTop, width, height)
 	}
 	return m.split(prefix, max(20, m.width) >= wideLayout, list, m.panelLines)
 }
@@ -200,7 +237,7 @@ func (m *Model) listLines(title string, items []listItem, cursor int, top *int, 
 			iconW = ansi.StringWidth(it.icon) + 1
 		}
 		rest := ansi.Truncate(it.name, max(4, width-iconW), "…")
-		if shortW > 0 {
+		if shortW > 0 && (!it.header || it.short != "") {
 			name := ansi.Truncate(it.name, max(4, width-iconW-shortW-1), "…")
 			short := ansi.Truncate(it.short, shortW, "…")
 			pad := max(1, width-iconW-ansi.StringWidth(name)-ansi.StringWidth(short))

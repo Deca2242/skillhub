@@ -4,8 +4,8 @@ Visibles: 14 · sin agente: 3 (4 desactivadas visibles, 2 activas sin agente)
 Búsqueda: agent-browser
 ╭──────────────────────────────────────╮╭──────────────────────────────────────────────────────────╮
 │ Skills (1)                           ││ agent-browser
-│ ○ agent-browser          desactivada ││ Desactivada desde 2026-11-22 10:00. Ningún agente la ve.
-│                                      ││ Al activarla vuelve a estar en Claude Code y OpenCode.
+│ ── Globales (1) ──                   ││ Desactivada desde 2026-11-22 10:00. Ningún agente la ve.
+│ ○ agent-browser          desactivada ││ Al activarla vuelve a estar en Claude Code y OpenCode.
 │                                      ││
 │                                      ││ En skillhub: desactivada
 │                                      ││ Disponible en: ningún agente
