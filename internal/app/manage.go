@@ -158,6 +158,12 @@ func (a *App) PlanRemove(ctx context.Context, key string) (Proposal, error) {
 	return a.Plan(ctx, Request{Action: ActionRemove, Key: key})
 }
 
+// PlanRemoveGroup plans removing all eligible global copies and links
+// attributed to the scanner-observed graph skillID.
+func (a *App) PlanRemoveGroup(ctx context.Context, skillID string) (Proposal, error) {
+	return a.Plan(ctx, Request{Action: ActionRemove, Key: skillID, Group: true})
+}
+
 // PlanUndo plans undoing the version 2 operation of snapshot.
 func (a *App) PlanUndo(ctx context.Context, snapshot string) (Proposal, error) {
 	return a.Plan(ctx, Request{Action: ActionUndo, Snapshot: snapshot})
@@ -400,7 +406,13 @@ func (m *manager) planRaw(req Request) (Proposal, error) {
 		}
 		return Proposal{PlanID: tp.Plan.ID, plan: tp.Plan, Toggle: toggleView(tp.Preview)}, nil
 	case ActionRemove:
-		rp, err := m.remove.Remove(req.Key)
+		var rp remove.Plan
+		var err error
+		if req.Group {
+			rp, err = m.remove.RemoveGroup(req.Key)
+		} else {
+			rp, err = m.remove.Remove(req.Key)
+		}
 		if err != nil {
 			return Proposal{}, err
 		}

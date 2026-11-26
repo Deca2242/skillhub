@@ -408,6 +408,9 @@ func (m *Model) handleManageSkillsKey(k string) (tea.Cmd, bool) {
 	case "d":
 		return m.startPlan(app.Request{Action: app.ActionDisable, Key: acts.Key}), true
 	case "e":
+		if acts.RemoveGroup && acts.RemoveGroupID != "" {
+			return m.startPlan(app.Request{Action: app.ActionRemove, Key: acts.RemoveGroupID, Group: true}), true
+		}
 		return m.startPlan(app.Request{Action: app.ActionRemove, Key: removeTarget(acts)}), true
 	case "o":
 		return m.startPlan(app.Request{Action: app.ActionAdoptOff}), true

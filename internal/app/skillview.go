@@ -253,8 +253,14 @@ type SkillActions struct {
 	// RemoveKey is the exact removal target passed to ActionRemove when
 	// Remove is true (a store key, dir:<home-rel>, lock:<name> or parked:<key>).
 	RemoveKey string
-	Disable   bool
-	Remove    bool
+	// RemoveGroup is true when the skill has multiple attributed global
+	// folders and at least one is eligible for complete global removal.
+	RemoveGroup bool
+	// RemoveGroupID is the scanner-observed graph Skill ID passed to
+	// ActionRemove with Group=true when RemoveGroup is true.
+	RemoveGroupID string
+	Disable       bool
+	Remove        bool
 	// Manual is true when the skill is a confirmed independent manual
 	// installation: no recorded origin, no foreign zone, unambiguous claim,
 	// and every observed folder confirmed free of .git.
@@ -384,9 +390,20 @@ func (m *manager) skillActions(g graph.Graph, found []doctor.Finding) (map[strin
 						acts.RemoveKey = target
 					}
 				}
+			} else if len(s.Folders) > 1 && (s.Zone == graph.ZoneNone || s.Zone == graph.ZoneProfile) {
+				if _, err := m.remove.RemoveGroup(s.ID); err == nil {
+					acts.RemoveGroup = true
+					acts.RemoveGroupID = s.ID
+				}
 			}
 		case dir == g.Store:
 			acts = m.storeActions(g, base, entry)
+			if len(s.Folders) > 1 {
+				if _, err := m.remove.RemoveGroup(s.ID); err == nil {
+					acts.RemoveGroup = true
+					acts.RemoveGroupID = s.ID
+				}
+			}
 		case dir == off:
 			if slices.Contains(offKeys, base) {
 				acts.Off, acts.OffKey, acts.OffKeys = true, base, slices.Clone(offKeys)
@@ -396,6 +413,12 @@ func (m *manager) skillActions(g graph.Graph, found []doctor.Finding) (map[strin
 				if _, err := m.remove.Remove(target); err == nil {
 					acts.Remove = true
 					acts.RemoveKey = target
+				}
+			}
+			if len(s.Folders) > 1 {
+				if _, err := m.remove.RemoveGroup(s.ID); err == nil {
+					acts.RemoveGroup = true
+					acts.RemoveGroupID = s.ID
 				}
 			}
 		}

@@ -68,27 +68,29 @@ const (
 	TUIPanelUnmanaged     = "skillhub no la gestiona: revísala en Salud (4)."
 	TUIPanelIgnored       = "Ignorada: skillhub no la muestra ni la revisa."
 
-	TUIActionDisable  = "[d] Desactivar"
-	TUIActionRemove   = "[e] Eliminar"
-	TUIActionEnable   = "[a] Activar"
-	TUIActionDetail   = "[enter] Ver todo"
-	TUIActionAdoptOff = "[o] Desactivarla de verdad"
-	TUIActionFixLink  = "[p] Arreglar el enlace roto"
-	TUIActionDoctor   = "[4] Ver en Salud"
-	TUIActionIgnore   = "[x] Ignorar"
-	TUIActionUnignore = "[x] Dejar de ignorar"
+	TUIActionDisable        = "[d] Desactivar"
+	TUIActionRemove         = "[e] Eliminar"
+	TUIActionRemoveComplete = "[e] Eliminar por completo"
+	TUIActionEnable         = "[a] Activar"
+	TUIActionDetail         = "[enter] Ver todo"
+	TUIActionAdoptOff       = "[o] Desactivarla de verdad"
+	TUIActionFixLink        = "[p] Arreglar el enlace roto"
+	TUIActionDoctor         = "[4] Ver en Salud"
+	TUIActionIgnore         = "[x] Ignorar"
+	TUIActionUnignore       = "[x] Dejar de ignorar"
 
-	TUIKeyDisable  = "d desactivar"
-	TUIKeyRemove   = "e eliminar"
-	TUIKeyEnable   = "a activar"
-	TUIKeyDetail   = "enter ver todo"
-	TUIKeyIgnore   = "x ignorar"
-	TUIKeyUnignore = "x dejar de ignorar"
-	TUIKeyAdoptOff = "o desactivarla de verdad"
-	TUIKeyFixLink  = "p arreglar el enlace roto"
-	TUIKeyDoctor   = "4 ver en Salud"
-	TUIKeyHelp     = "? ayuda"
-	TUIKeyQuit     = "q salir"
+	TUIKeyDisable        = "d desactivar"
+	TUIKeyRemove         = "e eliminar"
+	TUIKeyRemoveComplete = "e eliminar por completo"
+	TUIKeyEnable         = "a activar"
+	TUIKeyDetail         = "enter ver todo"
+	TUIKeyIgnore         = "x ignorar"
+	TUIKeyUnignore       = "x dejar de ignorar"
+	TUIKeyAdoptOff       = "o desactivarla de verdad"
+	TUIKeyFixLink        = "p arreglar el enlace roto"
+	TUIKeyDoctor         = "4 ver en Salud"
+	TUIKeyHelp           = "? ayuda"
+	TUIKeyQuit           = "q salir"
 )
 
 // TUIPanelAvailable names the agents that see the skill.
@@ -322,6 +324,45 @@ func TUIPlanSummary(p app.Proposal, name AgentNamer) Summary {
 			s.Lines = append(s.Lines, reloadIn(p.Reload, name))
 		}
 	case app.ActionRemove:
+		if p.Remove != nil && p.Remove.Group {
+			label := p.Remove.SkillName
+			if label == "" {
+				label = p.Remove.Key
+			}
+			s.Question = fmt.Sprintf("¿Eliminar por completo %s?", SafeLine(label))
+			first := "Ningún agente deja de detectarla."
+			if len(p.Remove.Targets) > 0 {
+				first = fmt.Sprintf("Dejará de estar disponible en %s.", agents(p.Remove.Targets, name))
+			}
+			folderPaths := make([]string, 0, len(p.Remove.Folders))
+			for _, f := range p.Remove.Folders {
+				folderPaths = append(folderPaths, SafeLine(f.Path))
+			}
+			second := fmt.Sprintf("Copias globales: %s.", strings.Join(folderPaths, ", "))
+			if len(p.Remove.Links) > 0 {
+				links := make([]string, 0, len(p.Remove.Links))
+				for _, l := range p.Remove.Links {
+					links = append(links, SafeLine(l.Path))
+				}
+				second += fmt.Sprintf(" Enlaces que se quitan: %s.", strings.Join(links, ", "))
+			}
+			second += " Se mueven a la papelera de skillhub: se deshace todo junto con z enseguida, o desde el Historial (h)."
+			s.Lines = []string{first, second}
+			if len(p.Remove.KeptCopies) > 0 || len(p.Remove.Homonyms) > 0 {
+				var kept []string
+				for _, c := range p.Remove.KeptCopies {
+					kept = append(kept, fmt.Sprintf("%s (%s)", SafeLine(c.Path), SafeLine(keptCopyReason(c))))
+				}
+				for _, h := range p.Remove.Homonyms {
+					kept = append(kept, fmt.Sprintf("%s (copia independiente con el mismo nombre)", SafeLine(h.Path)))
+				}
+				s.Lines = append(s.Lines, "Se conservan sin tocar: "+strings.Join(kept, ", ")+".")
+			}
+			if len(p.Reload) > 0 {
+				s.Lines = append(s.Lines, reloadIn(p.Reload, name))
+			}
+			break
+		}
 		if p.Remove != nil && p.Remove.Project {
 			name := SafeLine(p.Remove.SkillName)
 			root := SafeLine(p.Remove.ProjectRoot)
@@ -467,6 +508,14 @@ func TUIDone(res app.Result, name AgentNamer) string {
 	case app.ActionLink:
 		first = fmt.Sprintf("Listo: %s está disponible en %s.", SafeLine(r.Key), SafeLine(name(r.Harness)))
 	case app.ActionRemove:
+		if p.Remove != nil && p.Remove.Group {
+			label := p.Remove.SkillName
+			if label == "" {
+				label = p.Remove.Key
+			}
+			first = fmt.Sprintf("Listo: todas las copias globales elegibles de %s se movieron a la papelera de skillhub.", SafeLine(label))
+			break
+		}
 		if p.Remove != nil && p.Remove.Project {
 			first = fmt.Sprintf("Listo: %s (%s) se movió a la papelera de skillhub.", SafeLine(p.Remove.SkillName), SafeLine(p.Remove.ProjectRoot))
 			break

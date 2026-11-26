@@ -370,18 +370,10 @@ func TestTUIGroupedCopiesManualAndProtectedLabels(t *testing.T) {
 
 	selectSkill(t, m, "shared-copy")
 	got := screen(m)
-	for _, want := range []string{text.TUIRowManual, "Instalación manual", "Recomendado: " + text.TUIActionSeeHealth} {
+	for _, want := range []string{text.TUIRowManual, "Instalación manual", "Recomendado: " + text.TUIActionRemoveComplete} {
 		if !strings.Contains(got, want) {
 			t.Errorf("shared-copy lacks %q:\n%s", want, got)
 		}
-	}
-	if strings.Contains(got, text.TUIActionRemove) {
-		t.Errorf("shared-copy wrongly offered remove:\n%s", got)
-	}
-	before := mc.hash()
-	pressRun(m, "e")
-	if m.InPlanForTest() || mc.hash() != before {
-		t.Errorf("e on shared-copy planned or wrote:\n%s", screen(m))
 	}
 
 	m = openSized(t, a, 120, 40)
@@ -390,8 +382,11 @@ func TestTUIGroupedCopiesManualAndProtectedLabels(t *testing.T) {
 	if !strings.Contains(gotMixed, text.TUIRowUnmanaged) {
 		t.Errorf("mixed-copy lost %q:\n%s", text.TUIRowUnmanaged, gotMixed)
 	}
-	if strings.Contains(gotMixed, "Instalación manual") || strings.Contains(gotMixed, text.TUIActionRemove) {
-		t.Errorf("mixed-copy wrongly showed manual or remove:\n%s", gotMixed)
+	if strings.Contains(gotMixed, "Instalación manual") {
+		t.Errorf("mixed-copy wrongly showed manual:\n%s", gotMixed)
+	}
+	if !strings.Contains(gotMixed, text.TUIActionRemoveComplete) {
+		t.Errorf("mixed-copy lacks %q for its eligible copy:\n%s", text.TUIActionRemoveComplete, gotMixed)
 	}
 
 	m = openSized(t, a, 120, 40)
@@ -447,4 +442,92 @@ func TestGoldenGlobalRemove(t *testing.T) {
 		selectSkill(t, m, "agent-browser")
 		teatest.RequireEqualOutput(t, stable(mc, screen(m)))
 	})
+}
+
+func TestTUIGroupRemoveCompleteWithLinksProtectedAndUndo(t *testing.T) {
+	mc := newMachine(t)
+	shared := graphtest.SkillMD("group-tui", "two identical global copies")
+	mc.h.WriteFile(".claude/skills/group-tui/SKILL.md", shared)
+	mc.h.WriteFile(".codex/skills/group-tui/SKILL.md", shared)
+	mc.h.Symlink(".kiro/skills/group-tui-alias", "../../.claude/skills/group-tui")
+	// Protected copy in diagnostic profile.
+	mc.h.WriteFile(".claude-omni/skills/group-tui/SKILL.md", shared)
+	// Same-name independent copy in gemini (not attributed).
+	mc.h.WriteFile(".gemini/skills/group-tui/SKILL.md", graphtest.SkillMD("group-tui", "independent"))
+
+	m := openSized(t, mc.newApp(), 120, 40)
+	selectSkill(t, m, "group-tui")
+
+	got := screen(m)
+	for _, want := range []string{text.TUIActionRemoveComplete, text.TUIKeyRemoveComplete} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("group-tui panel/footer lacks %q:\n%s", want, got)
+		}
+	}
+
+	before := mc.hash()
+	pressRun(m, "e")
+	if !m.InPlanForTest() {
+		t.Fatalf("e did not open group confirmation; status=%q", m.StatusForTest())
+	}
+	if mc.hash() != before {
+		t.Fatal("opening preview modified disk")
+	}
+
+	confirm := strings.ReplaceAll(flat(screen(m)), "- ", "-")
+	for _, want := range []string{
+		"¿Eliminar por completo group-tui?",
+		mc.h.Path(".claude/skills/group-tui"),
+		mc.h.Path(".codex/skills/group-tui"),
+		mc.h.Path(".kiro/skills/group-tui-alias"),
+		mc.h.Path(".claude-omni/skills/group-tui"),
+		mc.h.Path(".gemini/skills/group-tui"),
+	} {
+		if !strings.Contains(confirm, strings.ReplaceAll(flat(want), "- ", "-")) {
+			t.Errorf("confirmation lacks %q:\n%s", want, screen(m))
+		}
+	}
+
+	// Toggle details view with v and back, still read-only.
+	pressRun(m, "v")
+	details := flat(screen(m))
+	if !strings.Contains(details, flat("Plan: Eliminar por completo group-tui")) {
+		t.Errorf("details view lacks proposal title:\n%s", screen(m))
+	}
+	pressRun(m, "v")
+	if mc.hash() != before {
+		t.Fatal("toggling details modified disk")
+	}
+
+	// Cancel writes nothing.
+	pressRun(m, "n")
+	if m.InPlanForTest() || mc.hash() != before {
+		t.Fatal("cancelling group removal left plan open or wrote something")
+	}
+
+	// Confirm removes eligible copies and owned links, preserves protected & homonym.
+	pressRun(m, "e")
+	pressRun(m, "s")
+	for _, gone := range []string{".claude/skills/group-tui", ".codex/skills/group-tui", ".kiro/skills/group-tui-alias"} {
+		if mc.exists(gone) {
+			t.Errorf("%s still exists after confirmed group removal", gone)
+		}
+	}
+	for _, kept := range []string{".claude-omni/skills/group-tui/SKILL.md", ".gemini/skills/group-tui/SKILL.md"} {
+		if !mc.exists(kept) {
+			t.Errorf("retained copy %s was removed", kept)
+		}
+	}
+
+	// One undo restores all removed copies and links.
+	pressRun(m, "z")
+	if !m.InPlanForTest() {
+		t.Fatalf("z did not open undo confirmation; status=%q", m.StatusForTest())
+	}
+	pressRun(m, "s")
+	for _, restored := range []string{".claude/skills/group-tui/SKILL.md", ".codex/skills/group-tui/SKILL.md", ".kiro/skills/group-tui-alias"} {
+		if !mc.exists(restored) {
+			t.Errorf("undo did not restore %s", restored)
+		}
+	}
 }

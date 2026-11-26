@@ -594,9 +594,11 @@ func (m *Model) rowActions(row SkillRow) []panelAction {
 	}
 	if row.Ignored {
 		// An ignored skill keeps its ignore preference; e still removes it
-		// when the planner accepts its exact target.
+		// when the planner accepts its exact target or group ID.
 		var out []panelAction
-		if m.actions[row.ID].Remove {
+		if m.actions[row.ID].RemoveGroup {
+			out = append(out, panelAction{"e", text.TUIActionRemoveComplete, text.TUIKeyRemoveComplete})
+		} else if m.actions[row.ID].Remove {
 			out = append(out, panelAction{"e", text.TUIActionRemove, text.TUIKeyRemove})
 		}
 		return append(out, panelAction{"enter", text.TUIActionDetail, text.TUIKeyDetail})
@@ -609,7 +611,9 @@ func (m *Model) rowActions(row SkillRow) []panelAction {
 	if acts.Off {
 		out = append(out, panelAction{"o", text.TUIActionAdoptOff, text.TUIKeyAdoptOff})
 	}
-	if acts.Remove {
+	if acts.RemoveGroup {
+		out = append(out, panelAction{"e", text.TUIActionRemoveComplete, text.TUIKeyRemoveComplete})
+	} else if acts.Remove {
 		out = append(out, panelAction{"e", text.TUIActionRemove, text.TUIKeyRemove})
 	}
 	if acts.Key != "" && (len(acts.Unlink) > 0 || acts.LinkIn != "") {

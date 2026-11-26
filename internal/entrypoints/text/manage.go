@@ -268,6 +268,13 @@ func Title(p app.Proposal) string {
 	case app.ActionAdoptOff:
 		return "Adoptar como desactivadas las skills de OFF/"
 	case app.ActionRemove:
+		if p.Remove != nil && p.Remove.Group {
+			label := p.Remove.SkillName
+			if label == "" {
+				label = p.Remove.Key
+			}
+			return fmt.Sprintf("Eliminar por completo %s", SafeLine(label))
+		}
 		if p.Remove != nil && p.Remove.Key != "" {
 			return fmt.Sprintf("Eliminar %s", SafeLine(p.Remove.Key))
 		}
@@ -416,21 +423,61 @@ var modified = map[string]string{
 	"unknown": "no se sabe: no hay un hash registrado con qué comparar",
 }
 
-func writeRemove(b *strings.Builder, r *app.RemovePreview) {
-	state := "activa"
-	switch {
-	case r.Project:
-		state = "proyecto (" + SafeLine(r.ProjectRoot) + ")"
-	case r.Parked:
-		state = "desactivada"
-	case r.Off:
-		state = "desactivada a mano en OFF/"
+func keptCopyReason(c app.KeptCopy) string {
+	switch c.Reason {
+	case "diagnostic_profile":
+		if c.Profile != "" {
+			return "perfil " + c.Profile + " (solo lectura)"
+		}
+		return "perfil de diagnóstico (solo lectura)"
+	case "git":
+		return "clon o repositorio de git (protegido)"
+	case "foreign_zone":
+		return "zona protegida que skillhub no toca"
+	case "outside_global_root":
+		return "fuera de las carpetas globales de skills"
+	case "ambiguous":
+		return "reclamada por otra skill o entrada"
+	case "alias":
+		return "enlace simbólico, no carpeta real"
+	default:
+		if c.Reason != "" {
+			return c.Reason
+		}
+		return "excluida por seguridad"
 	}
-	if r.Folder == "" {
-		// A parked record whose folder was already gone (park_entry).
-		b.WriteString("Sin carpeta: solo queda su registro desactivado.\n")
+}
+
+func writeRemove(b *strings.Builder, r *app.RemovePreview) {
+	if r.Group {
+		for _, f := range r.Folders {
+			state := "activa"
+			if f.Off {
+				state = "desactivada a mano en OFF/"
+			}
+			fmt.Fprintf(b, "Carpeta (%s): %s (árbol %s)\n", state, SafeLine(f.Path), SafeLine(short(f.TreeSHA)))
+		}
+		if len(r.Targets) > 0 {
+			fmt.Fprintf(b, "Agentes que dejan de detectarla: %s\n", joinSafe(r.Targets))
+		} else {
+			b.WriteString("Agentes que dejan de detectarla: ninguno\n")
+		}
 	} else {
-		fmt.Fprintf(b, "Carpeta (%s): %s (árbol %s)\n", state, SafeLine(r.Folder), SafeLine(short(r.TreeSHA)))
+		state := "activa"
+		switch {
+		case r.Project:
+			state = "proyecto (" + SafeLine(r.ProjectRoot) + ")"
+		case r.Parked:
+			state = "desactivada"
+		case r.Off:
+			state = "desactivada a mano en OFF/"
+		}
+		if r.Folder == "" {
+			// A parked record whose folder was already gone (park_entry).
+			b.WriteString("Sin carpeta: solo queda su registro desactivado.\n")
+		} else {
+			fmt.Fprintf(b, "Carpeta (%s): %s (árbol %s)\n", state, SafeLine(r.Folder), SafeLine(short(r.TreeSHA)))
+		}
 	}
 	if r.Modified != "" {
 		fmt.Fprintf(b, "Modificada localmente: %s\n", SafeLine(lookup(modified, r.Modified)))
@@ -443,6 +490,12 @@ func writeRemove(b *strings.Builder, r *app.RemovePreview) {
 		fmt.Fprintf(b, "Entrada del lock que se quita: «%s»\n", SafeLine(r.LockEntry.Name))
 	case r.ParkedEntry != nil:
 		b.WriteString("Su entrada del lock aparcada se descarta (queda en el snapshot).\n")
+	}
+	if len(r.KeptCopies) > 0 {
+		b.WriteString("Copias protegidas o excluidas que se conservan:\n")
+		for _, c := range r.KeptCopies {
+			fmt.Fprintf(b, "  %s (%s)\n", SafeLine(c.Path), SafeLine(keptCopyReason(c)))
+		}
 	}
 	if len(r.Homonyms) > 0 {
 		b.WriteString("Otras copias con el mismo nombre (no se tocan; se resuelven con «skillhub doctor»):\n")

@@ -69,6 +69,18 @@ func removeView(pv remove.Preview) *RemovePreview {
 		Parked: pv.Parked, Off: pv.Off, Folder: pv.Folder, TreeSHA: pv.TreeSHA, ParkedEntry: pv.ParkedEntry,
 		Modified: string(pv.Modified.State), ModifiedExpected: pv.Modified.Expected, ModifiedActual: pv.Modified.Actual,
 		PendingCandidates: slices.Clone(pv.PendingCandidates), Targets: slices.Clone(pv.Targets),
+		Group: pv.Group, SkillID: pv.SkillID, RetainedTargets: slices.Clone(pv.RetainedTargets),
+	}
+	for _, f := range pv.Folders {
+		out.Folders = append(out.Folders, RemovedFolder{
+			Path: f.Path, TreeSHA: f.TreeSHA, Off: f.Off, InStore: f.InStore, Harnesses: slices.Clone(f.Harnesses),
+		})
+	}
+	for _, c := range pv.KeptCopies {
+		out.KeptCopies = append(out.KeptCopies, KeptCopy{
+			Path: c.Path, Name: c.Name, TreeSHA: c.TreeSHA,
+			Harnesses: slices.Clone(c.Harnesses), Profile: c.Profile, Reason: c.Reason,
+		})
 	}
 	for _, l := range pv.Links {
 		out.Links = append(out.Links, LinkChange{Path: l.Path, Target: l.Target, Harnesses: slices.Clone(l.Harnesses)})

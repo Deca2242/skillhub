@@ -168,6 +168,16 @@ type Preview struct {
 	PendingCandidates []string
 	// Targets are the harnesses that see the skill today and stop seeing it.
 	Targets []string
+	// Group marks a complete global removal of a grouped installation.
+	Group bool
+	// SkillID is the scanner-observed graph Skill ID for a group removal.
+	SkillID string
+	// Folders are the eligible global folders removed by a group removal.
+	Folders []RemovedFolder
+	// KeptCopies are protected or unproven copies of the group that remain.
+	KeptCopies []KeptCopy
+	// RetainedTargets are harnesses that still see the skill via a retained copy.
+	RetainedTargets []string
 }
 
 // Link is a symlink the removal takes out: its path, exact content and the

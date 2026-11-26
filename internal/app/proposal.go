@@ -38,6 +38,9 @@ type Request struct {
 	Action Action `json:"action"`
 	// Key is the skill's store key (disable, enable, unlink, link, remove).
 	Key string `json:"key,omitempty"`
+	// Group requests complete global removal of the grouped installation
+	// identified by Key (a scanner-observed graph Skill ID).
+	Group bool `json:"group,omitempty"`
 	// Harness is the harness of unlink and link.
 	Harness string `json:"harness,omitempty"`
 	// Install is the reviewed revision, its targets and the time the lock
@@ -199,6 +202,31 @@ type RemovePreview struct {
 	KeptLinks         []KeptLink
 	PendingCandidates []string
 	Targets           []string
+	Group             bool
+	SkillID           string
+	Folders           []RemovedFolder
+	KeptCopies        []KeptCopy
+	RetainedTargets   []string
+}
+
+// RemovedFolder is one eligible global folder removed by a group removal.
+type RemovedFolder struct {
+	Path      string
+	TreeSHA   string
+	Off       bool
+	InStore   bool
+	Harnesses []string
+}
+
+// KeptCopy is a copy attributed to a group that remains untouched because it
+// is protected or unproven, with its exclusion reason.
+type KeptCopy struct {
+	Path      string
+	Name      string
+	TreeSHA   string
+	Harnesses []string
+	Profile   string
+	Reason    string
 }
 
 // RemovedEntry is the lock entry a remove takes out.

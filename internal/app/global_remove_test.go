@@ -436,3 +436,65 @@ func TestSkillActionsGroupedAndAliasPreserveUnknownProvider(t *testing.T) {
 		t.Errorf("lock:agent-browser Remove=%v RemoveKey=%q, want true, %q", lockAct.Remove, lockAct.RemoveKey, "agent-browser")
 	}
 }
+
+func TestGroupRemoveLifecycleThroughApp(t *testing.T) {
+	m := newMachine(t)
+	shared := graphtest.SkillMD("group-app", "shared global")
+	m.h.WriteFile(".claude/skills/group-app/SKILL.md", shared)
+	m.h.WriteFile(".codex/skills/group-app/SKILL.md", shared)
+	m.h.Symlink(".kiro/skills/group-app-link", "../../.claude/skills/group-app")
+	// Unattributed same-name independent copy in gemini.
+	m.h.WriteFile(".gemini/skills/group-app/SKILL.md", graphtest.SkillMD("group-app", "independent"))
+
+	acts, err := m.app.SkillActions(bg)
+	must(t, err)
+	var groupID string
+	for _, id := range []string{"dir:.claude/skills/group-app", "dir:.codex/skills/group-app"} {
+		a := acts[id]
+		if a.Remove {
+			t.Errorf("%s: single Remove=true, want false", id)
+		}
+		if !a.RemoveGroup || a.RemoveGroupID == "" {
+			t.Fatalf("%s: RemoveGroup=%v RemoveGroupID=%q, want true + non-empty", id, a.RemoveGroup, a.RemoveGroupID)
+		}
+		groupID = a.RemoveGroupID
+	}
+
+	p, err := m.app.PlanRemoveGroup(bg, groupID)
+	must(t, err)
+	if p.Remove == nil || !p.Remove.Group || len(p.Remove.Folders) != 2 {
+		t.Fatalf("PlanRemoveGroup = %+v, want Group=true with 2 folders", p.Remove)
+	}
+	// gemini-cli still has its independent homonym, so it must not be in p.Remove.Targets.
+	if slices.Contains(p.Remove.Targets, "gemini-cli") {
+		t.Errorf("Targets = %v, must not include gemini-cli", p.Remove.Targets)
+	}
+
+	// Stale-state check: adding a new link invalidates the plan.
+	m.h.Symlink(".kiro/skills/group-app-link2", "../../.codex/skills/group-app")
+	if _, err := m.app.ApplyPlan(bg, p.Request, p.PlanID); !errors.Is(err, app.ErrPlanChanged) {
+		t.Fatalf("ApplyPlan after external change = %v, want ErrPlanChanged", err)
+	}
+
+	// Re-plan and apply.
+	p, err = m.app.PlanRemoveGroup(bg, groupID)
+	must(t, err)
+	res := m.apply(p)
+	if m.exists(".claude/skills/group-app") || m.exists(".codex/skills/group-app") || m.exists(".kiro/skills/group-app-link") {
+		t.Fatal("removed group copies/links still exist")
+	}
+	if !m.exists(".gemini/skills/group-app/SKILL.md") {
+		t.Fatal("unattributed homonym was removed")
+	}
+
+	// One undo restores all removed copies and links.
+	u, err := m.app.PlanUndo(bg, res.SnapshotID)
+	must(t, err)
+	line := m.lastV2()
+	if _, err := m.app.UndoOperation(bg, app.UndoLine{Target: line.Target, SnapshotID: res.SnapshotID, PlanID: u.PlanID}); err != nil {
+		t.Fatalf("UndoOperation: %v", err)
+	}
+	if !m.exists(".claude/skills/group-app/SKILL.md") || !m.exists(".codex/skills/group-app/SKILL.md") || !m.exists(".kiro/skills/group-app-link") {
+		t.Fatal("undo did not restore all group copies and links")
+	}
+}
