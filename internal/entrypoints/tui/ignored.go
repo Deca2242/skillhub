@@ -144,6 +144,11 @@ func (m *Model) stopIgnoring(drop []string) tea.Cmd {
 		return nil
 	}
 	m.busy = true
+	m.unignoreReload = true
+	m.unignoreFocus = ""
+	if len(skills) > 0 {
+		m.unignoreFocus = skills[0]
+	}
 	return unignoreCmd(m.app, keep, text.TUIUnignored(skills, entries))
 }
 

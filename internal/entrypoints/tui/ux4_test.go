@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/exp/teatest/v2"
 
 	"skillhub/internal/app"
@@ -365,5 +366,140 @@ func TestSettingsRefusesKeptComma(t *testing.T) {
 	}
 	if string(mc.readSettings()) != saved {
 		t.Error("the list with a comma was rewritten")
+	}
+}
+
+func pressKeyMsg(m *tui.Model, msg tea.KeyPressMsg) tea.Cmd {
+	next, cmd := m.Update(msg)
+	*m = *next.(*tui.Model)
+	return cmd
+}
+
+func runCmdForTest(m *tui.Model, cmd tea.Cmd) {
+	if cmd == nil {
+		return
+	}
+	msg := cmd()
+	if msg == nil {
+		return
+	}
+	if batch, ok := msg.(tea.BatchMsg); ok {
+		for _, sub := range batch {
+			runCmdForTest(m, sub)
+		}
+		return
+	}
+	next, follow := m.Update(msg)
+	*m = *next.(*tui.Model)
+	runCmdForTest(m, follow)
+}
+
+func TestUnignoreLastFromIgnoredFilterExitsToAll(t *testing.T) {
+	mc := newMachine(t)
+	a := mc.newApp()
+	mc.ignore(a, "grill-with-docs")
+	m := openSized(t, a, 100, 30)
+	total := m.RowCountForTest()
+	for range 5 {
+		pressRun(m, "f")
+	}
+	if got := screen(m); !strings.Contains(got, "Skills · ignoradas (1)") || m.RowCountForTest() != 1 {
+		t.Fatalf("the ignored filter does not show 1 skill:\n%s", got)
+	}
+	pressRun(m, "x")
+	if got := ignored(t, a); len(got) != 0 {
+		t.Errorf("ignore = %v, want empty", got)
+	}
+	if want := "Ya no se ignora grill-with-docs: vuelve a aparecer en Skills."; m.StatusForTest() != want {
+		t.Errorf("status = %q, want %q", m.StatusForTest(), want)
+	}
+	if got := screen(m); strings.Contains(got, "Skills · ignoradas") {
+		t.Errorf("still in ignored filter after unignoring last skill:\n%s", got)
+	}
+	if m.RowCountForTest() != total+1 {
+		t.Errorf("Skills shows %d rows, want %d", m.RowCountForTest(), total+1)
+	}
+	if got := m.SelectedIDForTest(); got != "lock:grill-with-docs" {
+		t.Errorf("selected = %q, want lock:grill-with-docs", got)
+	}
+}
+
+func TestUnignoreLastFromSettingsSpaceKeyExitsIgnoredFilter(t *testing.T) {
+	mc := newMachine(t)
+	a := mc.newApp()
+	mc.ignore(a, "grill-with-docs")
+	m := openSized(t, a, 100, 30)
+	total := m.RowCountForTest()
+	for range 5 {
+		pressRun(m, "f")
+	}
+	openIgnored(m)
+	runCmdForTest(m, pressKeyMsg(m, tea.KeyPressMsg{Code: tea.KeySpace}))
+	if got := screen(m); !strings.Contains(got, "> [x] grill-with-docs") {
+		t.Fatalf("space did not open Ignoradas checkboxes:\n%s", got)
+	}
+	runCmdForTest(m, pressKeyMsg(m, tea.KeyPressMsg{Code: tea.KeySpace}))
+	pressRun(m, "enter")
+	pressRun(m, "1")
+	if got := screen(m); strings.Contains(got, "Skills · ignoradas") {
+		t.Errorf("still in ignored filter after unignoring last skill in Settings:\n%s", got)
+	}
+	if m.RowCountForTest() != total+1 {
+		t.Errorf("Skills shows %d rows, want %d", m.RowCountForTest(), total+1)
+	}
+}
+
+func TestReloadLocalWithCtrlRAndF5(t *testing.T) {
+	mc := newMachine(t)
+	a := mc.newApp()
+	m := openSized(t, a, 100, 30)
+	initial := m.RowCountForTest()
+
+	mc.ignore(a, "grill-with-docs")
+	cmd := pressKeyMsg(m, tea.KeyPressMsg{Code: 'r', Mod: tea.ModCtrl})
+	if got, want := m.StatusForTest(), "Recargando inventario local..."; got != want {
+		t.Errorf("ctrl+r immediate status = %q, want %q", got, want)
+	}
+	runCmdForTest(m, cmd)
+	if got, want := m.StatusForTest(), "Inventario recargado."; got != want {
+		t.Errorf("ctrl+r done status = %q, want %q", got, want)
+	}
+	if m.RowCountForTest() != initial-1 {
+		t.Errorf("after ctrl+r rows = %d, want %d", m.RowCountForTest(), initial-1)
+	}
+
+	mc.ignore(a, "")
+	cmd = pressKeyMsg(m, tea.KeyPressMsg{Code: tea.KeyF5})
+	if got, want := m.StatusForTest(), "Recargando inventario local..."; got != want {
+		t.Errorf("f5 immediate status = %q, want %q", got, want)
+	}
+	runCmdForTest(m, cmd)
+	if got, want := m.StatusForTest(), "Inventario recargado."; got != want {
+		t.Errorf("f5 done status = %q, want %q", got, want)
+	}
+	if m.RowCountForTest() != initial {
+		t.Errorf("after f5 rows = %d, want %d", m.RowCountForTest(), initial)
+	}
+}
+
+func TestSkillsAllIgnoredShowsGuidance(t *testing.T) {
+	mc := newMachine(t)
+	a := mc.newApp()
+	skills, err := a.Skills(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, sk := range skills {
+		names = append(names, sk.Name)
+	}
+	mc.ignore(a, strings.Join(names, ","))
+	m := openSized(t, a, 100, 30)
+	got := screen(m)
+	if strings.Contains(got, "No se encontraron skills instaladas.") {
+		t.Errorf("all-ignored Skills shows msgNoSkills:\n%s", got)
+	}
+	if !strings.Contains(got, "ignoradas") || !strings.Contains(got, "f") || !strings.Contains(got, "c") {
+		t.Errorf("all-ignored Skills lacks guidance to f/c:\n%s", got)
 	}
 }

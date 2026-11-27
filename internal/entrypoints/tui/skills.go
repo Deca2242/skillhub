@@ -104,6 +104,9 @@ func (m *Model) renderSkills() string {
 		if len(m.allRows) > 0 {
 			return prefix + m.listTitle() + "\n" + text.TUISkillsNoneShown
 		}
+		if len(m.ignored) > 0 {
+			return prefix + msgAllSkillsIgnored
+		}
 		return prefix + msgNoSkills
 	}
 	var globalRows, projectRows []SkillRow

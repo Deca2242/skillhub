@@ -226,8 +226,11 @@ type Model struct {
 	intervalInput  textinput.Model
 	// ignored are the skills the ignore setting hides, and unignore the
 	// check boxes Ajustes shows of them (UX4).
-	ignored  []app.IgnoredSkill
-	unignore checks
+	ignored        []app.IgnoredSkill
+	unignore       checks
+	unignoreReload bool
+	unignoreFocus  string
+	reloading      bool
 
 	// Catalog reads have their own lifetime, separate from install and plan requests.
 	catalogInput   textinput.Model
@@ -377,6 +380,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case settingsSavedMsg:
 		m.busy = false
 		if msg.err != nil {
+			m.unignoreReload = false
+			m.unignoreFocus = ""
 			m.status = ExplainError(msg.err)
 			return m, nil
 		}
@@ -393,6 +398,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *Model) handleDataLoaded(msg dataLoadedMsg) *Model {
 	if msg.err != nil {
+		m.busy = false
+		m.reloading = false
+		m.unignoreReload = false
+		m.unignoreFocus = ""
 		m.status = ExplainError(msg.err)
 		m.loadFailed = true
 		return m
@@ -401,6 +410,10 @@ func (m *Model) handleDataLoaded(msg dataLoadedMsg) *Model {
 	m.loadFailed = false
 	m.managedPending = msg.managedPending
 	if msg.managedPending || msg.hasOp {
+		m.busy = false
+		m.reloading = false
+		m.unignoreReload = false
+		m.unignoreFocus = ""
 		m.interruptedOp = msg.op
 		m.mode = modeRecover
 		return m
@@ -422,6 +435,29 @@ func (m *Model) handleDataLoaded(msg dataLoadedMsg) *Model {
 	m.settings = msg.settings
 	m.bgStatus = msg.bgStatus
 	m.refreshTables()
+	if m.unignoreReload {
+		focus := m.unignoreFocus
+		m.unignoreReload = false
+		m.unignoreFocus = ""
+		if m.stateFilter == text.FilterIgnored && len(m.ignored) == 0 {
+			m.stateFilter = text.FilterAll
+			m.refreshTables()
+			cursor := 0
+			if focus != "" {
+				if idx := slices.IndexFunc(m.skillRows, func(r SkillRow) bool {
+					return r.RawName == focus || r.ID == focus
+				}); idx >= 0 {
+					cursor = idx
+				}
+			}
+			m.skillsTable.SetCursor(cursor)
+		}
+	}
+	if m.reloading {
+		m.reloading = false
+		m.busy = false
+		m.status = msgReloaded
+	}
 	return m
 }
 
@@ -638,6 +674,14 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.busy = true
 			m.status = msgChecking
 			return m, checkNowCmd(m.app)
+		}
+		return m, nil
+	case "ctrl+r", "f5":
+		if m.loaded && !m.busy {
+			m.busy = true
+			m.reloading = true
+			m.status = msgReloading
+			return m, loadDataCmd(m.app)
 		}
 		return m, nil
 	}
@@ -947,7 +991,7 @@ func (m *Model) handleSettingsKey(k string) (tea.Model, tea.Cmd) {
 			m.settingsCursor++
 		}
 		return m, nil
-	case "enter", " ":
+	case "enter", "space", " ":
 		switch m.settingsCursor {
 		case 0:
 			m.intervalInput.SetValue("")

@@ -454,7 +454,7 @@ destino que no lee el almacén directamente la ve por un enlace simbólico.
 - **Cuatro pestañas:** 1 Skills, 2 Actualizar, 3 Instalar y 4 Salud; `tab` las recorre. Entre
   paréntesis, cuántas skills hay, cuántas actualizaciones están pendientes y cuántos problemas se pueden
   reparar. `h` abre el Historial y `c` los Ajustes desde cualquier pestaña; `esc` vuelve. `r` revisa si
-  hay actualizaciones y `q` sale.
+  hay actualizaciones, `ctrl+r` o `f5` recarga el inventario local desde disco y `q` sale.
 - **Teclas:** todas son letras minúsculas. Si Bloq Mayús está activado, la mayúscula hace lo mismo, pero
   nunca se muestra; lo que escribes en un filtro o en un campo conserva sus mayúsculas. Ninguna letra
   tiene dos significados en la misma pestaña. Las listas se mueven con las flechas, PgUp, PgDn, `home` y
