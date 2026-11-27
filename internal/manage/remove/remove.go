@@ -8,6 +8,7 @@ package remove
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -65,12 +66,21 @@ type Deps struct {
 	// Files reads the lock's bytes and inspects paths without following
 	// symlinks.
 	Files FileReader
+	// Git verifies locally and read-only that a clone has no dirty or
+	// unbacked local work. RemoveClone fails closed when nil.
+	Git CloneSafetyChecker
 	// HashDir hashes a folder on disk; nil means treehash.Dir.
 	HashDir func(dir string) (treehash.Tree, error)
 	// ProjectDir and Project inspect direct skill folders in the current
 	// startup project without following symlinks.
 	ProjectDir string
 	Project    ProjectInspector
+}
+
+// CloneSafetyChecker verifies locally and read-only that root is a standalone,
+// clean Git clone with no dirty or unbacked local work.
+type CloneSafetyChecker interface {
+	CheckCleanClone(ctx context.Context, root string) (ports.CloneStatus, error)
 }
 
 // DirLister lists the direct entries of a directory.
@@ -105,6 +115,17 @@ var (
 	ErrAmbiguous = errors.New("the key names more than one skill")
 	// ErrChanged reports a skill that changed while it was being observed.
 	ErrChanged = errors.New("the skill changed while it was observed")
+	// ErrNotClone reports a target that is not a Git clone.
+	ErrNotClone = errors.New("the target is not a git clone")
+	// ErrDirtyClone reports a clone with uncommitted local changes or an
+	// in-progress Git operation.
+	ErrDirtyClone = errors.New("the git clone has uncommitted local changes")
+	// ErrUnbackedClone reports a clone with local commits, branches, stashes,
+	// or other work not backed by origin.
+	ErrUnbackedClone = errors.New("the git clone has local work not backed by origin")
+	// ErrCloneCheckFailed reports a clone whose Git safety state could not be
+	// verified locally and read-only.
+	ErrCloneCheckFailed = errors.New("the git clone state could not be verified")
 )
 
 // Options configures optional removal permissions.

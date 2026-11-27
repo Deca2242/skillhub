@@ -12,6 +12,7 @@ import (
 	iofs "io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -414,4 +415,36 @@ func jsString(s string) string {
 	}
 	b.WriteByte('"')
 	return b.String()
+}
+
+func TestPrepareWebSkillConservativeNonAnalyzableContent(t *testing.T) {
+	s := newSite(t, false)
+	w := fakes.NewWeb()
+	w.Serve("https://web.example/.well-known/agent-skills/index.json", []byte(`{
+  "skills": [
+    {
+      "name": "web-bin",
+      "description": "Web skill with non-analyzable file.",
+      "files": ["SKILL.md", "notes.md"]
+    }
+  ]
+}`))
+	w.Serve("https://web.example/.well-known/agent-skills/web-bin/SKILL.md",
+		[]byte("---\nname: web-bin\ndescription: Web.\n---\n\nSee https://evil.example/x\n\x00"))
+	w.Serve("https://web.example/.well-known/agent-skills/web-bin/notes.md",
+		[]byte{0xff, 0xfe, 'a'})
+
+	rev := s.webReview(w, "https://web.example@web-bin")
+	if !slices.Equal(rev.FrontmatterDelta.Changed, []string{"(unparsed frontmatter)"}) {
+		t.Errorf("frontmatter delta = %v, want [(unparsed frontmatter)]", rev.FrontmatterDelta.Changed)
+	}
+	if !slices.Contains(rev.Labels, domain.LabelNonTextFiles) {
+		t.Errorf("labels = %v, want non_text_files", rev.Labels)
+	}
+	if !slices.Contains(rev.Labels, domain.LabelNewPermissions) {
+		t.Errorf("labels = %v, want new_permissions", rev.Labels)
+	}
+	if slices.Contains(rev.Labels, domain.LabelTextOnly) {
+		t.Errorf("labels = %v, must not contain text_only", rev.Labels)
+	}
 }

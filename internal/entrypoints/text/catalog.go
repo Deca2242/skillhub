@@ -59,7 +59,6 @@ const (
 	catalogWebsite           = "sitio web (no es GitHub)"
 	catalogNotSupport        = "no instalable"
 	catalogInstallHelp       = "Para instalar: skillhub skills install <origen>, con owner/repo@skill para GitHub o https://sitio@skill para un sitio web\n"
-	catalogInstallEg         = "Por ejemplo: skillhub skills install %s\n"
 	catalogStale             = "Aviso: %s. Se muestran resultados guardados del %s.\n"
 )
 
@@ -117,16 +116,10 @@ func CatalogTable(entries []app.CatalogEntry) string {
 	return b.String()
 }
 
-// CatalogInstallHint says how to install a result, with the first one that
-// can be installed and is not yet as the example.
-func CatalogInstallHint(entries []app.CatalogEntry) string {
-	out := catalogInstallHelp
-	for _, e := range entries {
-		if e.Installable && !e.Installed {
-			return out + fmt.Sprintf(catalogInstallEg, SafeLine(e.InstallSource))
-		}
-	}
-	return out
+// CatalogInstallHint returns generic installation guidance without embedding
+// any catalog result origin.
+func CatalogInstallHint(_ []app.CatalogEntry) string {
+	return catalogInstallHelp
 }
 
 // CatalogError explains a failed catalog call; ok is false for any other

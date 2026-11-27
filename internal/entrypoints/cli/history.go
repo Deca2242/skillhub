@@ -59,7 +59,7 @@ func (r *runner) undoCmd() *cobra.Command {
 		Args:  exactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if strings.HasPrefix(args[0], "v2:") {
-				return r.undoV2(cmd, approval{yes: yes, plan: plan, dryRun: dryRun}, args[0], to)
+				return r.undoV2(cmd, approval{yes: yes, plan: plan, dryRun: dryRun}, args[0], to, cmd.Flags().Changed("to"))
 			}
 			if yes || plan != "" {
 				return fail(text.UndoFlagsV2Only)

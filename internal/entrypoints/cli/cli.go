@@ -105,6 +105,9 @@ func explain(err error) string {
 	if msg, ok := text.CatalogError(err); ok {
 		return msg
 	}
+	if msg, ok := text.PackError(err); ok {
+		return msg
+	}
 	switch {
 	case errors.As(err, &amb):
 		ids := make([]string, len(amb.IDs))
@@ -206,7 +209,7 @@ func (r *runner) root() *cobra.Command {
 	root.AddCommand(
 		r.tuiCmd(), r.scanCmd(), r.checkCmd(), r.updatesCmd(), r.historyCmd(),
 		r.undoCmd(), r.recoverCmd(), r.settingsCmd(), r.backgroundCmd(),
-		r.skillsCmd(), r.doctorCmd(),
+		r.skillsCmd(), r.packsCmd(), r.doctorCmd(),
 	)
 	forEach(root, func(c *cobra.Command) { c.DisableFlagsInUseLine = true })
 	return root

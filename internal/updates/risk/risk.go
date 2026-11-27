@@ -7,9 +7,11 @@
 package risk
 
 import (
+	"bytes"
 	"path"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"skillhub/internal/shared/domain"
 )
@@ -42,9 +44,15 @@ type AddedFileLines struct {
 type Input struct {
 	FileChanges      []domain.FileChange
 	StagedFiles      []string
+	NonTextFiles     []string
 	FrontmatterDelta domain.FrontmatterDelta
 	LocallyModified  bool
 	AddedLines       []AddedFileLines
+}
+
+// IsAnalyzableText reports whether data is valid UTF-8 without NUL bytes.
+func IsAnalyzableText(data []byte) bool {
+	return utf8.Valid(data) && bytes.IndexByte(data, 0) < 0
 }
 
 // Classify evaluates the version-1 risk rules against in and returns the
@@ -59,7 +67,7 @@ type Input struct {
 func Classify(in Input) []domain.Label {
 	labels := make([]domain.Label, 0, len(domain.Labels()))
 
-	if hasNonTextFiles(in.FileChanges) {
+	if hasNonTextFiles(in.FileChanges, in.NonTextFiles) {
 		labels = append(labels, domain.LabelNonTextFiles)
 	}
 	if hasScriptsTouch(in.FileChanges) {
@@ -104,7 +112,10 @@ func knownFilePaths(changes []domain.FileChange, staged []string) map[string]str
 	return paths
 }
 
-func hasNonTextFiles(changes []domain.FileChange) bool {
+func hasNonTextFiles(changes []domain.FileChange, nonTextFiles []string) bool {
+	if len(nonTextFiles) > 0 {
+		return true
+	}
 	for _, fc := range changes {
 		if fc.Change != domain.ChangeAdded && fc.Change != domain.ChangeModified {
 			continue

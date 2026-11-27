@@ -293,6 +293,12 @@ func (m *Model) handleApplied(msg appliedMsg) tea.Cmd {
 	m.busy = false
 	res := msg.res
 	switch {
+	case res.ClosePending:
+		m.managedPending = true
+		m.status = sentence(text.ClosePending(res.Committed, res.SnapshotID, msg.err))
+		if msg.req.Action == app.ActionInstall {
+			m.discardRevision()
+		}
 	case res.SnapshotID != "":
 		// The operation ran: an error after it is only a warning (A4 of L51).
 		// The mode is left as the user has it now.
@@ -328,7 +334,7 @@ func (m *Model) handleApplied(msg appliedMsg) tea.Cmd {
 	if m.v2.findingsLoaded {
 		cmds = append(cmds, findingsCmd(m.app))
 	}
-	if res.SnapshotID != "" {
+	if res.SnapshotID != "" && !res.ClosePending {
 		cmds = append(cmds, m.nextInChain(msg.id))
 	} else {
 		m.stopChain()

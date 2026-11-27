@@ -2,6 +2,8 @@ package cli_test
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -180,5 +182,79 @@ func TestSkillsShowEscapesHostileTextInTextOnly(t *testing.T) {
 	j := decodeSkillShow(t, f.ok("skills", "show", "bad", "--json").stdout)
 	if j.Description != "Hola"+hostile+"mundo" {
 		t.Errorf("expected raw description in JSON, got %q", j.Description)
+	}
+}
+
+func TestSkillsShowIncludesDraftPacks(t *testing.T) {
+	p := newPackMachine(t)
+	p.home.WriteFile(".agents/skills/alpha/SKILL.md", "---\nname: alpha\ndescription: Alpha skill\n---\nbody\n")
+	p.home.Symlink(".claude/skills/alpha", "../../.agents/skills/alpha")
+	p.home.WriteFile(".agents/.skill-lock.json", `{"version":3,"skills":{"alpha":{"source":"acme/skills","sourceType":"github","skillPath":"skills/alpha/SKILL.md","skillFolderHash":"1111"}}}`+"\n")
+
+	p.ok("packs", "create", "seguridad", "--description", "Auditoría")
+	p.ok("packs", "add", "seguridad", "lock:alpha")
+
+	out := p.ok("skills", "show", "alpha").stdout
+	if !strings.Contains(out, "Packs (borradores): seguridad") {
+		t.Errorf("skills show missing pack membership:\n%s", out)
+	}
+
+	var parsed struct {
+		Packs []struct {
+			Name        string `json:"name"`
+			Description string `json:"description"`
+		} `json:"packs"`
+	}
+	jsonOut := p.ok("skills", "show", "alpha", "--json").stdout
+	if err := json.Unmarshal([]byte(jsonOut), &parsed); err != nil {
+		t.Fatalf("skills show --json: %v\n%s", err, jsonOut)
+	}
+	if len(parsed.Packs) != 1 || parsed.Packs[0].Name != "seguridad" || parsed.Packs[0].Description != "Auditoría" {
+		t.Fatalf("unexpected packs in skills show --json: %+v", parsed.Packs)
+	}
+}
+
+func TestSkillsShowSucceedsAndOmitsPacksWhenSidecarUnavailable(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		raw  string
+	}{
+		{"bad json", "{not-json"},
+		{"unsupported version", `{"version":99,"packs":[]}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := newPackMachine(t)
+			p.home.WriteFile(".agents/skills/alpha/SKILL.md", "---\nname: alpha\ndescription: Alpha skill\n---\nbody\n")
+			p.home.Symlink(".claude/skills/alpha", "../../.agents/skills/alpha")
+			p.home.WriteFile(".agents/.skill-lock.json", `{"version":3,"skills":{"alpha":{"source":"acme/skills","sourceType":"github","skillPath":"skills/alpha/SKILL.md","skillFolderHash":"1111"}}}`+"\n")
+
+			sidecar := filepath.Join(p.home.Paths().StateDir(), "packs.json")
+			if err := os.MkdirAll(filepath.Dir(sidecar), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(sidecar, []byte(tc.raw), 0o644); err != nil {
+				t.Fatal(err)
+			}
+
+			textRes := p.run("skills", "show", "alpha")
+			if textRes.code != 0 || textRes.stderr != "" {
+				t.Fatalf("skills show failed: code=%d stderr=%q", textRes.code, textRes.stderr)
+			}
+			if strings.Contains(textRes.stdout, "Packs (borradores):") {
+				t.Errorf("expected packs line omitted when sidecar unavailable:\n%s", textRes.stdout)
+			}
+
+			jsonRes := p.run("skills", "show", "alpha", "--json")
+			if jsonRes.code != 0 || jsonRes.stderr != "" {
+				t.Fatalf("skills show --json failed: code=%d stderr=%q", jsonRes.code, jsonRes.stderr)
+			}
+			var rawMap map[string]any
+			if err := json.Unmarshal([]byte(jsonRes.stdout), &rawMap); err != nil {
+				t.Fatalf("invalid json: %v\n%s", err, jsonRes.stdout)
+			}
+			if _, exists := rawMap["packs"]; exists {
+				t.Errorf("expected packs key omitted when sidecar unavailable, got:\n%s", jsonRes.stdout)
+			}
+		})
 	}
 }

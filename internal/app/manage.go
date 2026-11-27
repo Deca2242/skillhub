@@ -596,7 +596,7 @@ func (a *App) ApplyPlan(ctx context.Context, req Request, approvedID string) (re
 			// Whatever happens, an undo that did not run leaves no empty
 			// staging behind; one that ran is tidied below.
 			defer func() {
-				if res.SnapshotID == "" {
+				if res.SnapshotID == "" && !res.ClosePending {
 					err = errors.Join(err, a.tidyStaging())
 				}
 			}()
@@ -625,7 +625,12 @@ func (a *App) ApplyPlan(ctx context.Context, req Request, approvedID string) (re
 	}
 	out, err := run.Execute()
 	if err != nil {
-		return Result{Proposal: p}, errors.Join(refusal(err), run.Release())
+		return Result{
+			Proposal:     p,
+			SnapshotID:   out.SnapshotID,
+			Committed:    out.Committed,
+			ClosePending: out.ClosePending || errors.Is(err, engine.ErrClosePending),
+		}, errors.Join(refusal(err), run.Release())
 	}
 	superseded, err := a.supersede(p)
 	if serr := a.tidyAfter(p); serr != nil {
@@ -711,11 +716,17 @@ type Recovery struct {
 	Leftovers bool
 }
 
+// ErrRecoverCleanup reports that the engine resolved the pending operation,
+// but cleaning up orphan install staging afterwards failed.
+var ErrRecoverCleanup = errors.New("the operation was recovered")
+
 // ManagedRecovery is the engine's recover result.
 type ManagedRecovery struct {
 	Found      bool
+	Resolved   bool
 	Committed  bool
 	RolledBack bool
+	Undo       bool
 	PlanID     string
 	SnapshotID string
 }
@@ -746,14 +757,15 @@ func (a *App) RecoverOperation(ctx context.Context) (Recovery, error) {
 	res, err := m.engine.Recover(ctx)
 	out := Recovery{Version: 2, V2: ManagedRecovery{
 		Found: res.Found, Committed: res.Committed, RolledBack: res.RolledBack,
-		PlanID: res.PlanID, SnapshotID: res.SnapshotID,
+		Undo: res.Undo, PlanID: res.PlanID, SnapshotID: res.SnapshotID,
 	}}
 	if err != nil {
 		return out, refusal(err)
 	}
+	out.V2.Resolved = true
 	// Once the record is resolved, nothing owns the staging any more.
 	if _, terr := a.clearOrphanStaging(); terr != nil {
-		return out, fmt.Errorf("the operation was recovered; empty the install staging: %w", terr)
+		return out, fmt.Errorf("%w: empty the install staging: %w", ErrRecoverCleanup, terr)
 	}
 	return out, nil
 }

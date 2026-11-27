@@ -368,13 +368,16 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case recoverFinishedMsg:
 		m.busy = false
-		if msg.err != nil {
+		if msg.err != nil && !msg.rec.V2.Resolved {
 			m.status = explainRecover(msg.rec, msg.err)
 			return m, nil
 		}
 		m.mode = modeNormal
 		m.managedPending = false
 		m.status = strings.TrimSpace(text.Recovered(msg.rec))
+		if msg.err != nil {
+			m.status += "\n" + strings.TrimSpace(text.RecoverCleanupWarning(msg.err))
+		}
 		return m, loadDataCmd(m.app)
 
 	case settingsSavedMsg:

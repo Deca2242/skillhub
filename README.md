@@ -272,7 +272,21 @@ skillhub doctor fix <hallazgo> [--repair <tipo>] [--canonical <ruta>] [--to <har
 
 skillhub skills search <consulta> [--limit n] [--json] [--refresh]   busca en skills.sh
 skillhub skills popular [--limit n] [--json] [--refresh]             las más instaladas, por temas
+
+skillhub packs list [--json]                           lista los borradores de packs
+skillhub packs create <pack> [--description <texto>]   crea un borrador de pack vacío
+skillhub packs show <pack> [--json]                    muestra sus miembros y la salud observada
+skillhub packs add <pack> <skill>                      agrega una skill observada al borrador
+skillhub packs remove <pack> <skill>                   quita un miembro del borrador
 ```
+
+Los borradores de packs se guardan en el archivo versionado `packs.json` dentro del directorio de estado de
+skillhub (`StateDir`), bajo el mismo lock de estado (`StateStore.Lock`), sin tocar carpetas de skills,
+enlaces ni `.skill-lock.json`. El archivo valida invariantes de identidad (sin nombres de pack duplicados ni
+miembros vacíos) al leer y escribir. Una fila que solo existe en `.skill-lock.json` sin carpeta ni `SKILL.md`
+en disco no se considera observada: no puede agregarse como miembro nuevo y, si ya estaba guardada, se
+muestra como `no observada` (`not_observed`) conservando su referencia. Si `packs.json` no se puede leer,
+`skills show` sigue funcionando y omite la pertenencia a packs en lugar de mostrarla vacía.
 
 Los comandos de gestión (el segundo grupo, salvo `doctor`) admiten además `--dry-run` y
 `--yes --plan <id>`. `<harness>` es el `id` de un agente, como `claude-code` u `opencode`:
@@ -305,6 +319,7 @@ carpeta raíz completa del clon de forma reversible avisando qué skills incluye
 - `locations`: ubicaciones detectadas en disco (`path`, `agent_id`, `kind`, `content_tree_sha`).
 - `activity`: historial de skillhub para esta skill (`at`, `action`, `target`, `v2`, y opcionalmente `operation` y `undo`).
 - `disabled_since` y `return_to` (opcionales): fecha y agentes de retorno cuando está desactivada con skillhub.
+- `packs`: lista de borradores de packs a los que pertenece (`name` y `description` opcional); se omite si el archivo de packs no puede leerse.
 
 ### Códigos de salida
 

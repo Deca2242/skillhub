@@ -26,9 +26,11 @@ type SkillShowData struct {
 	Activity      []app.ActivityEntry
 	Now           time.Time
 	// Parked is set for a skill disabled via skillhub (stored in v2 Parked).
-	Parked   bool
-	Since    time.Time
-	ReturnTo []string
+	Parked    bool
+	Since     time.Time
+	ReturnTo  []string
+	ShowPacks bool
+	Packs     []app.PackSummary
 }
 
 // SkillShow formats the full detail of a skill in neutral Spanish, escaping
@@ -49,6 +51,9 @@ func SkillShow(d SkillShowData) string {
 		fmt.Fprintf(&b, "Descripción: %s\n", SafeLine(s.Description))
 	}
 	fmt.Fprintf(&b, "%s\n", TUIPanelSkillhubState(d.SkillhubState))
+	if d.ShowPacks {
+		writeSkillPacks(&b, d.Packs)
+	}
 	if d.Parked {
 		if !d.Since.IsZero() {
 			fmt.Fprintf(&b, "%s\n", TUIPanelDisabledSince(d.Since.Local().Format("2006-01-02 15:04")))
@@ -152,4 +157,16 @@ func showOrNone(s string) string {
 		return "—"
 	}
 	return s
+}
+
+func writeSkillPacks(b *strings.Builder, packs []app.PackSummary) {
+	if len(packs) == 0 {
+		b.WriteString("Packs (borradores): ninguno\n")
+		return
+	}
+	names := make([]string, len(packs))
+	for i, p := range packs {
+		names[i] = SafeLine(p.Name)
+	}
+	fmt.Fprintf(b, "Packs (borradores): %s\n", strings.Join(names, ", "))
 }

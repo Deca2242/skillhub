@@ -91,6 +91,7 @@ func composeWith(newRunner func(paths.Paths) ports.ProcessRunner) (*app.App, err
 	// One lock store: version 1 rewrites entries through it, and the engine
 	// takes it both as its lock and as the one that drops an empty lock.
 	lock := skillslock.New(p, files)
+	st := statefile.New(p)
 	web, err := httpsget.New(runner)
 	if err != nil {
 		return nil, fmt.Errorf("prepare the website reader: %w", err)
@@ -107,7 +108,8 @@ func composeWith(newRunner func(paths.Paths) ports.ProcessRunner) (*app.App, err
 		Lock:        lock,
 		ManagedLock: lock,
 		Links:       fsadapter.NewLinkOps(p.Guard()),
-		State:       statefile.New(p),
+		State:       st,
+		Packs:       st,
 		Settings:    settings.New(p),
 		GitHub:      gh,
 		Git:         git.New(runner),

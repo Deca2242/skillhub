@@ -55,7 +55,7 @@ const (
 	FlagRepair        = "`tipo` de reparación que se aplica, si el hallazgo admite varias"
 	FlagCanonical     = "`ruta` de la carpeta canónica; solo con la reparación adopt"
 	FlagFixTo         = "`harness` de destino de una reinstalación; se puede repetir o separar con comas (por defecto, los detectados que se proponen)"
-	UndoLong          = "Deshace una actualización aplicada: <skill> es su nombre o su id, y --to elige el snapshot. Para deshacer una operación de gestión (instalar, eliminar, activar, desactivar, enlazar, quitar un enlace o reparar), <skill> es su línea del historial, por ejemplo v2:disable, y --to su snapshot; sin --to, la última. Deshacer una operación de gestión muestra su plan y pide confirmación, o se aprueba con --yes --plan <id>."
+	UndoLong          = "Deshace una actualización aplicada: <skill> es su nombre o su id, y --to elige el snapshot. Para deshacer una operación de gestión (instalar, eliminar, activar, desactivar, enlazar, quitar un enlace o reparar), <skill> es su línea del historial, por ejemplo v2:disable, y --to su snapshot; sin --to, la última operación elegible. Deshacer una operación de gestión muestra su plan y pide confirmación, o se aprueba con --yes --plan <id>."
 	FlagUndoPlan      = "identificador (`id`) del plan de deshacer que viste (operaciones de gestión, con --yes)"
 	FlagUndoYes       = "aprueba sin preguntar el deshacer cuyo identificador indica --plan (operaciones de gestión)"
 )
@@ -114,6 +114,27 @@ func SupersedeWarning(err error) string {
 		return fmt.Sprintf("aviso: la skill se eliminó y se puede deshacer, pero sus actualizaciones pendientes no se pudieron marcar como reemplazadas; siguen listadas como pendientes (detalle: %s)\n", Safe(cause))
 	}
 	return fmt.Sprintf("aviso: la operación se completó y se puede deshacer, pero falló lo que venía después (detalle: %s)\n", Safe(err.Error()))
+}
+
+// ClosePending explains an operation whose engine close did not finish,
+// distinguishing a confirmed journal commit from an unreadable journal where
+// commit could not be confirmed.
+func ClosePending(committed bool, snapshotID string, err error) string {
+	detail := ""
+	if err != nil {
+		detail = SafeLine(err.Error())
+	}
+	suffix := ""
+	if detail != "" {
+		suffix = fmt.Sprintf(" (detalle: %s)", detail)
+	}
+	if committed {
+		if snapshotID != "" {
+			return fmt.Sprintf("la operación ya quedó confirmada en el diario (snapshot %s), pero su cierre quedó pendiente; ejecuta «skillhub recover» para terminarlo%s", SafeLine(snapshotID), suffix)
+		}
+		return fmt.Sprintf("la operación ya quedó confirmada en el diario, pero su cierre quedó pendiente; ejecuta «skillhub recover» para terminarlo%s", suffix)
+	}
+	return fmt.Sprintf("no se pudo confirmar si la operación quedó registrada en el diario y su cierre quedó pendiente; no se revirtió nada: ejecuta «skillhub recover» para comprobarlo y cerrarla%s", suffix)
 }
 
 // RecoverFailed is what recover says when it could not resolve the
@@ -728,6 +749,8 @@ func Recovery(r app.ManagedRecovery) string {
 	switch {
 	case !r.Found:
 		return RecoverNoOp
+	case r.Committed && r.Undo:
+		return "La operación de deshacer interrumpida ya se había completado: se terminó de cerrar.\n"
 	case r.Committed:
 		return fmt.Sprintf("La operación de gestión interrumpida ya se había completado: se terminó de cerrar. Se deshace con su snapshot %s (búscala en «skillhub history»).\n", SafeLine(r.SnapshotID))
 	default:

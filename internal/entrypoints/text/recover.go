@@ -96,3 +96,14 @@ func Recovered(rec app.Recovery) string {
 	}
 	return RecoveryV1(rec.V1, rec.Leftovers)
 }
+
+// RecoverCleanupWarning formats the non-fatal warning when the engine
+// resolved the interrupted operation and only cleaning up orphan staging
+// afterwards failed.
+func RecoverCleanupWarning(err error) string {
+	if err == nil {
+		return ""
+	}
+	cause := strings.TrimPrefix(err.Error(), app.ErrRecoverCleanup.Error()+": ")
+	return fmt.Sprintf("aviso: la operación se recuperó, pero no se pudo limpiar la copia temporal de instalación (detalle: %s)\n", Safe(cause))
+}

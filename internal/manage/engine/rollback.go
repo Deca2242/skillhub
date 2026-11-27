@@ -274,6 +274,8 @@ type RecoverResult struct {
 	Committed bool
 	// RolledBack is true when Recover undid the operation.
 	RolledBack bool
+	// Undo is true when the pending operation was an undo.
+	Undo       bool
 	PlanID     string
 	SnapshotID string
 }
@@ -305,7 +307,7 @@ func (e *Engine) recover() (RecoverResult, error) {
 	if err := e.requireProjectGate(rec.Plan, "recover"); err != nil {
 		return RecoverResult{}, err
 	}
-	res := RecoverResult{Found: true, PlanID: rec.PlanID, SnapshotID: rec.SnapshotID}
+	res := RecoverResult{Found: true, PlanID: rec.PlanID, SnapshotID: rec.SnapshotID, Undo: rec.Plan.Undoes != ""}
 	snap, err := e.verifiedSnapshot(rec)
 	if err != nil {
 		return res, err
@@ -316,7 +318,10 @@ func (e *Engine) recover() (RecoverResult, error) {
 	}
 	if committed {
 		res.Committed = true
-		return res, e.closeCommitted(rec, snap)
+		if _, err := e.closeCommitted(rec, snap); err != nil {
+			return res, fmt.Errorf("%w: %w", ErrClosePending, err)
+		}
+		return res, nil
 	}
 	if err := e.rollbackSteps(rec, snap); err != nil {
 		var fe *ForeignStateError

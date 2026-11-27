@@ -6,13 +6,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/fs"
 	"maps"
 	"path"
 	"path/filepath"
 	"slices"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/aymanbagabas/go-udiff"
 	"go.yaml.in/yaml/v3"
@@ -230,11 +228,8 @@ func fileChanges(oldNodes, newNodes []treehash.Node) []domain.FileChange {
 // at dir and installed at folder, with every path relative to it.
 func (st stager) riskInput(dir, folder string, changes []domain.FileChange, staged []string) (risk.Input, error) {
 	in := risk.Input{FileChanges: changes, StagedFiles: staged, AddedLines: []risk.AddedFileLines{}}
-	read := func(root, rel string) ([]byte, error) {
+	readExpected := func(root, rel string) ([]byte, error) {
 		data, err := st.s.d.Files.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
-		if errors.Is(err, fs.ErrNotExist) {
-			return nil, nil
-		}
 		if err != nil {
 			return nil, fmt.Errorf("read %s: %w", rel, err)
 		}
@@ -244,40 +239,72 @@ func (st stager) riskInput(dir, folder string, changes []domain.FileChange, stag
 		if ch.Change == domain.ChangeRemoved || ch.OldSHA == ch.NewSHA {
 			continue
 		}
-		after, err := read(dir, ch.Path)
+		after, err := readExpected(dir, ch.Path)
 		if err != nil {
 			return risk.Input{}, err
 		}
 		var before []byte
+		beforePresent := false
 		if ch.Change == domain.ChangeModified {
-			if before, err = read(folder, ch.Path); err != nil {
+			beforePresent = true
+			if before, err = readExpected(folder, ch.Path); err != nil {
 				return risk.Input{}, err
 			}
 		}
-		if lines := addedLines(before, after); len(lines) > 0 {
+		if !risk.IsAnalyzableText(after) || (beforePresent && !risk.IsAnalyzableText(before)) {
+			in.NonTextFiles = append(in.NonTextFiles, ch.Path)
+		}
+		if lines := addedLines(before, beforePresent, after); len(lines) > 0 {
 			in.AddedLines = append(in.AddedLines, risk.AddedFileLines{Path: ch.Path, Lines: lines})
 		}
 	}
-	oldMD, err := read(folder, "SKILL.md")
-	if err != nil {
-		return risk.Input{}, err
+	newPresent := slices.Contains(staged, "SKILL.md")
+	oldPresent := newPresent
+	for _, ch := range changes {
+		if ch.Path != "SKILL.md" {
+			continue
+		}
+		switch ch.Change {
+		case domain.ChangeAdded:
+			oldPresent = false
+		case domain.ChangeModified:
+			oldPresent, newPresent = true, true
+		case domain.ChangeRemoved:
+			oldPresent, newPresent = true, false
+		}
+		break
 	}
-	newMD, err := read(dir, "SKILL.md")
-	if err != nil {
-		return risk.Input{}, err
+	var oldMD, newMD []byte
+	if oldPresent {
+		var err error
+		if oldMD, err = readExpected(folder, "SKILL.md"); err != nil {
+			return risk.Input{}, err
+		}
 	}
-	in.FrontmatterDelta = frontmatterDelta(oldMD, newMD)
+	if newPresent {
+		var err error
+		if newMD, err = readExpected(dir, "SKILL.md"); err != nil {
+			return risk.Input{}, err
+		}
+	}
+	in.FrontmatterDelta = frontmatterDelta(oldMD, oldPresent, newMD, newPresent)
 	return in, nil
 }
 
-// addedLines returns the lines after adds to before. A file that is not
-// UTF-8 text has none: its change is labeled by its name, not its lines.
-func addedLines(before, after []byte) []string {
-	if !utf8.Valid(after) || bytes.IndexByte(after, 0) >= 0 {
+// addedLines returns the lines after adds to before. When after is not
+// analyzable UTF-8 text without NUL, it returns nil. When before is present
+// and not analyzable, all lines of after are returned so text warnings on
+// new content are preserved.
+func addedLines(before []byte, beforePresent bool, after []byte) []string {
+	if !risk.IsAnalyzableText(after) {
 		return nil
 	}
+	diffBefore := ""
+	if beforePresent && risk.IsAnalyzableText(before) {
+		diffBefore = string(before)
+	}
 	var out []string
-	for _, edit := range udiff.Lines(string(before), string(after)) {
+	for _, edit := range udiff.Lines(diffBefore, string(after)) {
 		added := strings.TrimSuffix(edit.New, "\n")
 		if edit.New == "" {
 			continue
@@ -289,11 +316,33 @@ func addedLines(before, after []byte) []string {
 
 // frontmatterDelta lists the frontmatter keys of SKILL.md whose value was
 // added, removed or changed, nested keys joined by dots, sorted.
-func frontmatterDelta(before, after []byte) domain.FrontmatterDelta {
-	oldKeys, oldOK := frontmatterKeys(before)
-	newKeys, newOK := frontmatterKeys(after)
+func frontmatterDelta(before []byte, oldPresent bool, after []byte, newPresent bool) domain.FrontmatterDelta {
+	oldKeys, oldOK := map[string]string{}, true
+	newKeys, newOK := map[string]string{}, true
+	switch {
+	case !newPresent, oldPresent && bytes.Equal(before, after):
+		if oldPresent {
+			oldKeys, oldOK = frontmatterKeys(before)
+		}
+		if newPresent {
+			newKeys, newOK = frontmatterKeys(after)
+		}
+	default:
+		if oldPresent {
+			if !risk.IsAnalyzableText(before) {
+				oldOK = false
+			} else {
+				oldKeys, oldOK = frontmatterKeys(before)
+			}
+		}
+		if !risk.IsAnalyzableText(after) {
+			newOK = false
+		} else {
+			newKeys, newOK = frontmatterKeys(after)
+		}
+	}
 	changed := []string{}
-	if !newOK && !bytes.Equal(before, after) || !oldOK && newOK {
+	if !newOK && (!oldPresent || !bytes.Equal(before, after)) || !oldOK && newOK {
 		changed = append(changed, unparsedFrontmatter)
 	}
 	for k, v := range newKeys {

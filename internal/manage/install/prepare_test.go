@@ -348,3 +348,60 @@ func TestPrepareRefusesAKeyThatIsNotAStoreKey(t *testing.T) {
 		t.Errorf("staging root created for a refused key: %v", err)
 	}
 }
+
+func TestPrepareConservativeNonAnalyzableContent(t *testing.T) {
+	t.Run("valid utf8 text preserves existing labels", func(t *testing.T) {
+		w := newWorld(t)
+		_, tree := w.publish("acme/plain-txt", "main", map[string]string{
+			"notes.md": "Plain valid UTF-8 text: café.\n",
+		})
+		res := install.Resolved{Repo: "acme/plain-txt", FolderSHA: tree.SHA, Nodes: tree.Nodes, Name: "plain-txt", Key: "plain-txt"}
+
+		rev, err := w.preparer().Prepare(context.Background(), res)
+		if err != nil {
+			t.Fatalf("Prepare: %v", err)
+		}
+		if !slices.Equal(rev.Labels, []domain.Label{domain.LabelTextOnly}) {
+			t.Errorf("labels = %v, want [text_only]", rev.Labels)
+		}
+	})
+
+	t.Run("md file with NUL emits non_text_files and never text_only", func(t *testing.T) {
+		w := newWorld(t)
+		_, tree := w.publish("acme/nul-md", "main", map[string]string{
+			"notes.md": "text\x00nul",
+		})
+		res := install.Resolved{Repo: "acme/nul-md", FolderSHA: tree.SHA, Nodes: tree.Nodes, Name: "nul-md", Key: "nul-md"}
+
+		rev, err := w.preparer().Prepare(context.Background(), res)
+		if err != nil {
+			t.Fatalf("Prepare: %v", err)
+		}
+		if !slices.Equal(rev.Labels, []domain.Label{domain.LabelNonTextFiles}) {
+			t.Errorf("labels = %v, want [non_text_files]", rev.Labels)
+		}
+		if slices.Contains(rev.Labels, domain.LabelTextOnly) {
+			t.Errorf("labels %v must not contain text_only", rev.Labels)
+		}
+	})
+
+	t.Run("non-analyzable SKILL.md with valid yaml header is not accepted as complete", func(t *testing.T) {
+		w := newWorld(t)
+		_, tree := w.publish("acme/nul-skill", "main", map[string]string{
+			"SKILL.md": "---\nname: nul-skill\ndescription: Safe.\n---\n\nBody\x00\xff",
+		})
+		res := install.Resolved{Repo: "acme/nul-skill", FolderSHA: tree.SHA, Nodes: tree.Nodes, Name: "nul-skill", Key: "nul-skill"}
+
+		rev, err := w.preparer().Prepare(context.Background(), res)
+		if err != nil {
+			t.Fatalf("Prepare: %v", err)
+		}
+		if !slices.Equal(rev.FrontmatterDelta.Changed, []string{"(unparsed frontmatter)"}) {
+			t.Errorf("frontmatter delta = %v, want [(unparsed frontmatter)]", rev.FrontmatterDelta.Changed)
+		}
+		wantLabels := []domain.Label{domain.LabelNonTextFiles, domain.LabelNewPermissions}
+		if !slices.Equal(rev.Labels, wantLabels) {
+			t.Errorf("labels = %v, want %v", rev.Labels, wantLabels)
+		}
+	})
+}

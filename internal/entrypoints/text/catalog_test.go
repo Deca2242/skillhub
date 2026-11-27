@@ -48,20 +48,30 @@ func TestCatalogTable(t *testing.T) {
 	}
 }
 
-func TestCatalogInstallHintNamesTheFirstInstallableSkill(t *testing.T) {
+func TestCatalogInstallHintOmitsCatalogOriginExamples(t *testing.T) {
 	const hint = "Para instalar: skillhub skills install <origen>, con owner/repo@skill para GitHub o https://sitio@skill para un sitio web\n"
-	got := text.CatalogInstallHint(catalogEntries)
-	want := hint + "Por ejemplo: skillhub skills install vercel-labs/agent-skills@react-best\n"
-	if got != want {
-		t.Errorf("CatalogInstallHint =\n%q\nwant\n%q", got, want)
-	}
-	// A website is an example too.
-	if got := text.CatalogInstallHint(catalogEntries[1:]); got != hint+"Por ejemplo: skillhub skills install https://mintlify.com@mintlify\n" {
-		t.Errorf("CatalogInstallHint with a website first = %q", got)
-	}
-	// With nothing left to install, only the general form.
-	if got := text.CatalogInstallHint(catalogEntries[1:2]); got != hint {
-		t.Errorf("CatalogInstallHint without candidates = %q", got)
+	for _, tc := range []struct {
+		name    string
+		entries []app.CatalogEntry
+	}{
+		{"github first", catalogEntries},
+		{"website first", catalogEntries[1:]},
+		{"no installable candidates", catalogEntries[1:2]},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := text.CatalogInstallHint(tc.entries)
+			if got != hint {
+				t.Errorf("CatalogInstallHint =\n%q\nwant\n%q", got, hint)
+			}
+			if strings.Contains(got, "Por ejemplo:") {
+				t.Errorf("CatalogInstallHint embedded an example command: %q", got)
+			}
+			for _, e := range tc.entries {
+				if e.InstallSource != "" && strings.Contains(got, e.InstallSource) {
+					t.Errorf("CatalogInstallHint embedded catalog origin %q: %q", e.InstallSource, got)
+				}
+			}
+		})
 	}
 }
 

@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"skillhub/internal/inventory"
+	"skillhub/internal/packs"
 	"skillhub/internal/shared/domain"
 	"skillhub/internal/shared/paths"
 	"skillhub/internal/shared/ports"
@@ -90,6 +91,10 @@ type Deps struct {
 	// undo for real skill directories in the startup project directory.
 	ProjectDir string
 	Project    ProjectPort
+
+	// Packs persists draft packs (packs.go, T6). It is optional: without it
+	// pack commands fail with ErrMissingDependency and SkillPacks returns empty.
+	Packs packs.Store
 }
 
 func (d Deps) validate() error {
@@ -116,6 +121,7 @@ func (d Deps) validate() error {
 type App struct {
 	d          Deps
 	upd        *updates.Service
+	packs      *packs.Service
 	projectDir string
 }
 
@@ -125,6 +131,9 @@ func New(d Deps) (*App, error) {
 		return nil, err
 	}
 	a := &App{d: d, projectDir: normalizeProjectDir(d.Paths, d.ProjectDir)}
+	if d.Packs != nil {
+		a.packs = packs.New(d.Packs, d.Clock.Now)
+	}
 	upd, err := updates.New(updates.Deps{
 		Paths: d.Paths, Files: d.Files, Dirs: d.Dirs, Lock: d.Lock, State: d.State,
 		GitHub: d.GitHub, Clock: d.Clock, HashDir: d.HashDir,

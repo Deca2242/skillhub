@@ -93,7 +93,7 @@ func (r *runner) popularCmd() *cobra.Command {
 }
 
 // printCatalog writes the warnings to stderr, then the entries as JSON or
-// as a table followed by how to install one.
+// as a table followed by generic installation guidance.
 func (r *runner) printCatalog(cmd *cobra.Command, cf catalogFlags, res app.CatalogResult, empty string) error {
 	errOut := cmd.ErrOrStderr()
 	if res.Stale != nil {

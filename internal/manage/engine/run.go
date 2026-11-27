@@ -16,11 +16,24 @@ import (
 )
 
 // Outcome is an operation that closed: its plan and its snapshot, which the
-// journal line names and Undo takes.
+// journal line names and Undo takes. When ClosePending is true, Committed
+// distinguishes a confirmed journal commit (SnapshotID preserved) from an
+// unreadable journal where commit could not be confirmed.
 type Outcome struct {
-	PlanID     string
-	SnapshotID string
+	PlanID       string
+	SnapshotID   string
+	Committed    bool
+	ClosePending bool
 }
+
+// ErrClosePending reports that the operation's commit line may already be in
+// the journal (or is confirmed there), so the close could not finish and the
+// record stays pending for Recover.
+var ErrClosePending = errors.New("operation close pending")
+
+// errNotCommitted marks an appendOnce failure where the journal confirmed the
+// commit line is absent, so Execute may safely roll back.
+var errNotCommitted = errors.New("operation not committed")
 
 // ForeignStateError reports the step that met foreign state and what it saw.
 // It matches ErrForeignState; its text is the record's diagnostic.
@@ -120,10 +133,18 @@ func (r *Run) Execute() (Outcome, error) {
 	if err := e.verify(r.rec.Plan); err != nil {
 		return Outcome{}, r.rollback(snap, err)
 	}
-	if err := e.closeCommitted(r.rec, snap); err != nil {
-		return Outcome{}, err
+	committed, err := e.closeCommitted(r.rec, snap)
+	if err != nil {
+		if errors.Is(err, errNotCommitted) {
+			return Outcome{}, r.rollback(snap, err)
+		}
+		out := Outcome{PlanID: r.rec.PlanID, Committed: committed, ClosePending: true}
+		if committed {
+			out.SnapshotID = r.rec.SnapshotID
+		}
+		return out, fmt.Errorf("%w: %w", ErrClosePending, err)
 	}
-	return Outcome{PlanID: r.rec.PlanID, SnapshotID: r.rec.SnapshotID}, nil
+	return Outcome{PlanID: r.rec.PlanID, SnapshotID: r.rec.SnapshotID, Committed: true}, nil
 }
 
 // stepDone records that step i completed, with the entry it took out of the
@@ -748,16 +769,27 @@ func (e *Engine) journaled(id string, actions ...domain.HistoryAction) (bool, er
 // appendOnce journals action for rec unless a line of one of also already
 // does, so a close a crash interrupted does not journal twice.
 func (e *Engine) appendOnce(rec Record, action domain.HistoryAction, also ...domain.HistoryAction) error {
-	done, err := e.journaled(rec.SnapshotID, append(also, action)...)
-	if err != nil || done {
+	actions := append(slices.Clone(also), action)
+	done, err := e.journaled(rec.SnapshotID, actions...)
+	if err != nil {
 		return err
+	}
+	if done {
+		return nil
 	}
 	err = e.d.State.AppendJournal(domain.HistoryEntry{
 		At: e.d.Clock.Now().UTC(), Action: action, Target: JournalTarget(rec.Plan),
 		SnapshotID: rec.SnapshotID, Labels: []domain.Label{}, Detail: journalDetail(rec),
 	})
 	if err != nil {
-		return fmt.Errorf("journal the operation: %w", err)
+		done, jerr := e.journaled(rec.SnapshotID, actions...)
+		if jerr != nil {
+			return errors.Join(fmt.Errorf("journal the operation: %w", err), jerr)
+		}
+		if done {
+			return nil
+		}
+		return fmt.Errorf("%w: journal the operation: %w", errNotCommitted, err)
 	}
 	return nil
 }
@@ -766,31 +798,34 @@ func (e *Engine) appendOnce(rec Record, action domain.HistoryAction, also ...dom
 // journal line is the commit point: once it is written, Recover finishes the
 // close instead of rolling back. The state effect is applied before the
 // record goes, so a crash cannot lose it; applying it again is harmless.
-func (e *Engine) closeCommitted(rec Record, snap Snapshot) error {
+func (e *Engine) closeCommitted(rec Record, snap Snapshot) (bool, error) {
 	if err := e.appendOnce(rec, commitAction(rec.Plan)); err != nil {
-		return err
+		return false, err
 	}
 	if err := e.clearRestore(); err != nil {
-		return err
+		return true, err
 	}
 	if err := e.removeUndoneDirs(rec); err != nil {
-		return err
+		return true, err
 	}
 	// Tidying is best effort: the close never fails over it (A2 of P4).
 	_ = e.removeEmptyOwnLevels()
 	if !rec.Plan.Effect.IsZero() {
 		st, err := e.d.State.Load()
 		if err != nil {
-			return fmt.Errorf("read the state: %w", err)
+			return true, fmt.Errorf("read the state: %w", err)
 		}
 		if err := rec.Plan.Effect.apply(&st, snap, rec.Parked); err != nil {
-			return err
+			return true, err
 		}
 		if err := e.d.State.Save(st); err != nil {
-			return fmt.Errorf("save the state: %w", err)
+			return true, fmt.Errorf("save the state: %w", err)
 		}
 	}
-	return e.removeRecord()
+	if err := e.removeRecord(); err != nil {
+		return true, err
+	}
+	return true, nil
 }
 
 // closeRolledBack closes an operation rolled back to its preimages: one

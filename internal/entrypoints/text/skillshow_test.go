@@ -83,3 +83,35 @@ func TestSkillShowFormatsAllSectionsAndEscapesThirdPartyText(t *testing.T) {
 		}
 	}
 }
+
+func TestSkillShowDisplaysDraftPackMembership(t *testing.T) {
+	out := text.SkillShow(text.SkillShowData{
+		Skill: domain.Skill{
+			ID:    "lock:alpha",
+			Name:  "alpha",
+			State: domain.StateUpToDate,
+		},
+		SkillhubState: text.TUIStateActive,
+		ShowPacks:     true,
+		Packs: []app.PackSummary{
+			{Name: "seguridad"},
+			{Name: "web"},
+		},
+	})
+	if !strings.Contains(out, "Packs (borradores): seguridad, web") {
+		t.Errorf("SkillShow missing pack membership:\n%s", out)
+	}
+
+	omitted := text.SkillShow(text.SkillShowData{
+		Skill: domain.Skill{
+			ID:    "lock:alpha",
+			Name:  "alpha",
+			State: domain.StateUpToDate,
+		},
+		SkillhubState: text.TUIStateActive,
+		ShowPacks:     false,
+	})
+	if strings.Contains(omitted, "Packs (borradores):") {
+		t.Errorf("SkillShow should omit pack membership when ShowPacks is false:\n%s", omitted)
+	}
+}

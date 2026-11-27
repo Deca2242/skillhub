@@ -846,3 +846,66 @@ func TestClassifyLocallyModifiedAndCombinations(t *testing.T) {
 		})
 	}
 }
+
+func TestIsAnalyzableText(t *testing.T) {
+	tests := []struct {
+		name string
+		data []byte
+		want bool
+	}{
+		{name: "empty slice is analyzable", data: []byte{}, want: true},
+		{name: "plain ascii is analyzable", data: []byte("hello\nworld\n"), want: true},
+		{name: "valid multibyte utf8 is analyzable", data: []byte("hola café — 日本語\n"), want: true},
+		{name: "nul byte is not analyzable", data: []byte("hello\x00world"), want: false},
+		{name: "invalid utf8 is not analyzable", data: []byte{0xff, 0xfe, 'a'}, want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := risk.IsAnalyzableText(tt.data); got != tt.want {
+				t.Fatalf("IsAnalyzableText(%v) = %v, want %v", tt.data, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestClassifyNonTextContentSignal(t *testing.T) {
+	tests := []struct {
+		name  string
+		input risk.Input
+		want  []domain.Label
+	}{
+		{
+			name: "non-analyzable md file emits non_text_files and never text_only",
+			input: risk.Input{
+				FileChanges: []domain.FileChange{
+					{Path: "notes.md", Change: domain.ChangeAdded, NewMode: "100644"},
+				},
+				NonTextFiles: []string{"notes.md"},
+			},
+			want: []domain.Label{domain.LabelNonTextFiles},
+		},
+		{
+			name: "non-analyzable file preserves suspicious_text from other inspected lines",
+			input: risk.Input{
+				FileChanges: []domain.FileChange{
+					{Path: "notes.md", Change: domain.ChangeModified, OldMode: "100644", NewMode: "100644"},
+				},
+				NonTextFiles: []string{"notes.md"},
+				AddedLines: []risk.AddedFileLines{
+					{Path: "notes.md", Lines: []string{"see https://evil.example/payload"}},
+				},
+			},
+			want: []domain.Label{domain.LabelNonTextFiles, domain.LabelSuspiciousText},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := risk.Classify(tt.input)
+			if !slices.Equal(got, tt.want) {
+				t.Fatalf("Classify() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

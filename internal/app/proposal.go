@@ -374,6 +374,12 @@ type Result struct {
 	DryRun   bool
 	// SnapshotID names the snapshot that undoes the operation.
 	SnapshotID string
+	// Committed is true when the operation's commit line is confirmed in the
+	// journal (even if ClosePending is true).
+	Committed bool
+	// ClosePending is true when the engine close did not finish, so the record
+	// stays pending for Recover.
+	ClosePending bool
 	// Superseded are the update candidates a remove marked superseded.
 	Superseded []string
 }

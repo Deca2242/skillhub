@@ -124,7 +124,14 @@ func TestCatalogTextsEscapeThirdPartyText(t *testing.T) {
 		t.Errorf("CatalogTable allowed newline injection:\n%q", table)
 	}
 	hint := text.CatalogInstallHint(entries)
-	assertEscaped(t, "CatalogInstallHint", hint)
+	if hint != text.CatalogInstallHint(nil) {
+		t.Errorf("CatalogInstallHint(entries) = %q, want generic hint %q", hint, text.CatalogInstallHint(nil))
+	}
+	for _, e := range entries {
+		if e.InstallSource != "" && strings.Contains(hint, e.InstallSource) {
+			t.Errorf("CatalogInstallHint embedded InstallSource %q: %q", e.InstallSource, hint)
+		}
+	}
 
 	errMsg, ok := text.CatalogError(&app.CatalogError{Kind: app.ErrCatalogFailed, Err: errors.New("boom" + h)})
 	if !ok {

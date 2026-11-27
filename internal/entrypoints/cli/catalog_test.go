@@ -71,10 +71,12 @@ func TestSkillsSearchPrintsATableAndHowToInstall(t *testing.T) {
 		"alpha       acme/skills               1204           instalada (acme/skills)\n" +
 		"Mintlify    mintlify.com              5              sitio web (no es GitHub)\n" +
 		"\n" +
-		"Para instalar: skillhub skills install <origen>, con owner/repo@skill para GitHub o https://sitio@skill para un sitio web\n" +
-		"Por ejemplo: skillhub skills install vercel-labs/agent-skills@react-best\n"
+		"Para instalar: skillhub skills install <origen>, con owner/repo@skill para GitHub o https://sitio@skill para un sitio web\n"
 	if r.code != 0 || r.stdout != want || r.stderr != "" {
 		t.Errorf("search = exit %d\nstdout:\n%s\nwant:\n%s\nstderr: %q", r.code, r.stdout, want, r.stderr)
+	}
+	if strings.Contains(r.stdout, "Por ejemplo:") || strings.Contains(r.stdout, "skillhub skills install vercel-labs/agent-skills@react-best") {
+		t.Errorf("search output embedded an example command:\n%s", r.stdout)
 	}
 	if calls := catalog.Calls(); !slices.Equal(calls, []fakes.CatalogCall{{Query: "react hooks", Limit: app.DefaultCatalogLimit}}) {
 		t.Errorf("calls = %v", calls)
@@ -214,10 +216,12 @@ func TestSkillsPopular(t *testing.T) {
 		"react-best  vercel/skills  500            \n" +
 		"agent-kit   other/repo     300            \n" +
 		"\n" +
-		"Para instalar: skillhub skills install <origen>, con owner/repo@skill para GitHub o https://sitio@skill para un sitio web\n" +
-		"Por ejemplo: skillhub skills install vercel/skills@react-best\n"
+		"Para instalar: skillhub skills install <origen>, con owner/repo@skill para GitHub o https://sitio@skill para un sitio web\n"
 	if r.code != 0 || r.stdout != want || r.stderr != "" {
 		t.Errorf("popular = exit %d\nstdout:\n%s\nwant:\n%s\nstderr: %q", r.code, r.stdout, want, r.stderr)
+	}
+	if strings.Contains(r.stdout, "Por ejemplo:") || strings.Contains(r.stdout, "skillhub skills install vercel/skills@react-best") {
+		t.Errorf("popular output embedded an example command:\n%s", r.stdout)
 	}
 	if q := catalog.Queries(); len(q) != len(app.PopularTopics) {
 		t.Errorf("popular asked %d topics, want %d", len(q), len(app.PopularTopics))
@@ -279,8 +283,7 @@ func TestSkillsSearchShowsOriginAndPossibleDuplicates(t *testing.T) {
 		"beta        other/repo                800            instalada (other/repo)\n" +
 		"react-best  vercel-labs/agent-skills  700            \n" +
 		"\n" +
-		"Para instalar: skillhub skills install <origen>, con owner/repo@skill para GitHub o https://sitio@skill para un sitio web\n" +
-		"Por ejemplo: skillhub skills install other/skills@alpha\n"
+		"Para instalar: skillhub skills install <origen>, con owner/repo@skill para GitHub o https://sitio@skill para un sitio web\n"
 	if r.code != 0 || r.stdout != want || r.stderr != "" {
 		t.Errorf("search = exit %d\nstdout:\n%s\nwant:\n%s\nstderr: %q", r.code, r.stdout, want, r.stderr)
 	}

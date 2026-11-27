@@ -35,11 +35,13 @@ func (r *runner) skillsShowCmd() *cobra.Command {
 			}
 			ops := a.Operations(r.ctx, hist)
 			activity := app.SkillActivity(hist, ops, res.skill)
+			packs, packsErr := a.SkillPacks(res.skill.ID)
+			packsAvailable := packsErr == nil
 
 			if asJSON {
-				return writeJSON(cmd.OutOrStdout(), buildSkillShowJSON(a, res, activity))
+				return writeJSON(cmd.OutOrStdout(), buildSkillShowJSON(a, res, activity, packsAvailable, packs))
 			}
-			out := text.SkillShow(buildSkillShowData(a, res, activity))
+			out := text.SkillShow(buildSkillShowData(a, res, activity, packsAvailable, packs))
 			_, err = fmt.Fprint(cmd.OutOrStdout(), out)
 			return err
 		},
@@ -188,7 +190,7 @@ func findSkillByID(skills []domain.Skill, id string) (domain.Skill, bool) {
 	return domain.Skill{}, false
 }
 
-func buildSkillShowData(a *app.App, res resolvedShowSkill, activity []app.ActivityEntry) text.SkillShowData {
+func buildSkillShowData(a *app.App, res resolvedShowSkill, activity []app.ActivityEntry, packsAvailable bool, packs []app.PackSummary) text.SkillShowData {
 	d := text.SkillShowData{
 		Skill:         res.skill,
 		SkillhubState: res.skillhubState,
@@ -196,6 +198,8 @@ func buildSkillShowData(a *app.App, res resolvedShowSkill, activity []app.Activi
 		AgentName:     a.AgentName,
 		Activity:      activity,
 		Now:           a.Now(),
+		ShowPacks:     packsAvailable,
+		Packs:         packs,
 	}
 	if res.parked != nil {
 		d.Parked = true
@@ -246,6 +250,12 @@ type skillShowJSON struct {
 	Activity      []skillActJSON    `json:"activity"`
 	DisabledSince *time.Time        `json:"disabled_since,omitempty"`
 	ReturnTo      []string          `json:"return_to,omitempty"`
+	Packs         *[]skillPackJSON  `json:"packs,omitempty"`
+}
+
+type skillPackJSON struct {
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
 }
 
 type skillSightJSON struct {
@@ -264,7 +274,7 @@ type skillActJSON struct {
 	Undo      bool      `json:"undo,omitempty"`
 }
 
-func buildSkillShowJSON(a *app.App, res resolvedShowSkill, activity []app.ActivityEntry) skillShowJSON {
+func buildSkillShowJSON(a *app.App, res resolvedShowSkill, activity []app.ActivityEntry, packsAvailable bool, packs []app.PackSummary) skillShowJSON {
 	s := res.skill
 	out := skillShowJSON{
 		ID:            s.ID,
@@ -277,6 +287,16 @@ func buildSkillShowJSON(a *app.App, res resolvedShowSkill, activity []app.Activi
 		Sightings:     make([]skillSightJSON, 0, len(res.sightings)),
 		Locations:     make([]domain.Location, 0, len(s.Locations)),
 		Activity:      make([]skillActJSON, 0, len(activity)),
+	}
+	if packsAvailable {
+		items := make([]skillPackJSON, 0, len(packs))
+		for _, p := range packs {
+			items = append(items, skillPackJSON{
+				Name:        p.Name,
+				Description: p.Description,
+			})
+		}
+		out.Packs = &items
 	}
 	if len(s.Issues) > 0 {
 		out.Issues = make([]string, len(s.Issues))

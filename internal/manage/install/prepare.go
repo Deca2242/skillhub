@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/aymanbagabas/go-udiff"
 	"go.yaml.in/yaml/v3"
@@ -92,7 +91,9 @@ func (p Preparer) Prepare(ctx context.Context, r Resolved) (Review, error) {
 			_ = p.Files.RemoveTree(dir) //nolint:errcheck // staging is a disposable cache.
 			return Review{}, fmt.Errorf("prepare %s: read %s: %w", r.Key, n.Path, err)
 		}
-		if lines := addedLines(data); len(lines) > 0 {
+		if !risk.IsAnalyzableText(data) {
+			in.NonTextFiles = append(in.NonTextFiles, n.Path)
+		} else if lines := addedLines(data); len(lines) > 0 {
 			in.AddedLines = append(in.AddedLines, risk.AddedFileLines{Path: n.Path, Lines: lines})
 		}
 		if n.Path == skillFile {
@@ -112,7 +113,7 @@ func (p Preparer) Prepare(ctx context.Context, r Resolved) (Review, error) {
 // addedLines returns the lines of a file added to an empty folder, as an
 // update computes them; a file that is not UTF-8 text has none.
 func addedLines(after []byte) []string {
-	if !utf8.Valid(after) || bytes.IndexByte(after, 0) >= 0 {
+	if !risk.IsAnalyzableText(after) {
 		return nil
 	}
 	var out []string
@@ -127,8 +128,11 @@ func addedLines(after []byte) []string {
 
 // frontmatterDelta lists every frontmatter key of a SKILL.md, nested keys
 // joined by dots, sorted: against an empty folder each one is new. A header
-// that does not parse is unparsedFrontmatter.
+// that does not parse or a non-analyzable file is unparsedFrontmatter.
 func frontmatterDelta(data []byte) domain.FrontmatterDelta {
+	if !risk.IsAnalyzableText(data) {
+		return domain.FrontmatterDelta{Changed: []string{unparsedFrontmatter}}
+	}
 	changed := []string{}
 	data = bytes.ReplaceAll(data, []byte("\r\n"), []byte("\n"))
 	rest, found := bytes.CutPrefix(data, []byte("---\n"))

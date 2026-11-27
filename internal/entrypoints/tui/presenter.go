@@ -584,9 +584,30 @@ type HistoryRow struct {
 
 // PresentHistory formats journal entries newest-first for the Historial screen.
 func PresentHistory(entries []domain.HistoryEntry) []HistoryRow {
+	v2Open := make(map[string]bool)
+	for _, e := range entries {
+		if !strings.HasPrefix(e.Target, "v2:") {
+			continue
+		}
+		switch e.Action {
+		case domain.ActionApplied:
+			if e.SnapshotID != "" {
+				v2Open[e.SnapshotID] = true
+			}
+		case domain.ActionUndone:
+			if id := undoDetailSnapshot(e.Detail); id != "" {
+				v2Open[id] = false
+			}
+		}
+	}
+
 	out := make([]HistoryRow, 0, len(entries))
 	for i := len(entries) - 1; i >= 0; i-- {
 		e := entries[i]
+		canUndo := e.Action == domain.ActionApplied && e.SnapshotID != ""
+		if canUndo && strings.HasPrefix(e.Target, "v2:") {
+			canUndo = v2Open[e.SnapshotID]
+		}
 		out = append(out, HistoryRow{
 			At:         FormatTime(e.At),
 			Action:     text.HistoryAction(e.Action),
@@ -594,12 +615,21 @@ func PresentHistory(entries []domain.HistoryEntry) []HistoryRow {
 			Versions:   fmt.Sprintf("%s → %s", ShortSHA(e.FromSHA), ShortSHA(e.ToSHA)),
 			SnapshotID: orEmpty(e.SnapshotID),
 			Detail:     orEmpty(text.SafeLine(e.Detail)),
-			CanUndo:    e.Action == domain.ActionApplied && e.SnapshotID != "",
+			CanUndo:    canUndo,
 			at:         e.At,
 			action:     e.Action,
 		})
 	}
 	return out
+}
+
+func undoDetailSnapshot(detail string) string {
+	for _, f := range strings.Fields(detail) {
+		if id, ok := strings.CutPrefix(f, "undoes="); ok {
+			return id
+		}
+	}
+	return ""
 }
 
 // SettingsView is the presenter output for the Ajustes screen.

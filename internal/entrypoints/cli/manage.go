@@ -95,7 +95,9 @@ func (r *runner) decide(cmd *cobra.Command, a *app.App, ap approval, p app.Propo
 		return fail(text.NoPlanToApply)
 	}
 	fmt.Fprint(out, text.Proposal(p))
-	fmt.Fprint(out, text.PlanID(token(p)))
+	if !ap.yes || ap.dryRun {
+		fmt.Fprint(out, text.PlanID(token(p)))
+	}
 	if ap.dryRun {
 		// A dry run refuses what the run would refuse first (B5).
 		if err := a.CheckPending(); err != nil {
@@ -114,6 +116,9 @@ func (r *runner) decide(cmd *cobra.Command, a *app.App, ap approval, p app.Propo
 		return fail(text.NotConfirmed)
 	}
 	res, err := apply(a, p, approved)
+	if ap.yes && !res.ClosePending {
+		fmt.Fprint(out, text.PlanID(token(p)))
+	}
 	return r.report(cmd, p.Request, res, err)
 }
 
@@ -121,6 +126,9 @@ func (r *runner) decide(cmd *cobra.Command, a *app.App, ap approval, p app.Propo
 // snapshot is set) it is a success, and an error after it only a warning
 // (A4 of L51).
 func (r *runner) report(cmd *cobra.Command, req app.Request, res app.Result, err error) error {
+	if res.ClosePending {
+		return fail("%s", text.ClosePending(res.Committed, res.SnapshotID, err))
+	}
 	if res.SnapshotID != "" {
 		fmt.Fprint(cmd.OutOrStdout(), text.Done(res))
 		if err != nil {
@@ -307,7 +315,7 @@ func (r *runner) reviewed(cmd *cobra.Command, a *app.App, ap approval, action ap
 	}
 	return r.decide(cmd, a, ap, p, func(a *app.App, p app.Proposal, id string) (app.Result, error) {
 		res, err := a.ApplyPlan(r.ctx, p.Request, id)
-		ran = res.SnapshotID != ""
+		ran = res.SnapshotID != "" || res.ClosePending
 		return res, err
 	})
 }
@@ -397,9 +405,12 @@ func (r *runner) fixCmd() *cobra.Command {
 // undoV2 undoes the version 2 operation of the journal line target, the
 // one of snapshot or, without it, the last one, through the same approval
 // as every plan.
-func (r *runner) undoV2(cmd *cobra.Command, ap approval, target, snapshot string) error {
+func (r *runner) undoV2(cmd *cobra.Command, ap approval, target, snapshot string, toSet bool) error {
 	if err := ap.check(); err != nil {
 		return err
+	}
+	if toSet && snapshot == "" {
+		return fail("no hay ninguna operación %s con el snapshot «»", text.SafeLine(target))
 	}
 	a, err := r.facade(true)
 	if err != nil {
@@ -409,14 +420,39 @@ func (r *runner) undoV2(cmd *cobra.Command, ap approval, target, snapshot string
 	if err != nil {
 		return err
 	}
-	var line *domain.HistoryEntry
+	undone := map[string]bool{}
 	for i := range journal {
 		h := &journal[i]
-		if h.Target == target && h.SnapshotID != "" && (snapshot == "" || h.SnapshotID == snapshot) {
-			line = h
+		if h.Action == domain.ActionUndone && strings.HasPrefix(h.Target, "v2:") {
+			if id := undoDetailSnapshot(h.Detail); id != "" {
+				undone[id] = true
+			}
+		}
+	}
+	var line *domain.HistoryEntry
+	sawApplied := false
+	for i := range journal {
+		h := &journal[i]
+		if h.Target != target || h.SnapshotID == "" {
+			continue
+		}
+		if snapshot != "" {
+			if h.SnapshotID == snapshot {
+				line = h
+			}
+			continue
+		}
+		if h.Action == domain.ActionApplied {
+			sawApplied = true
+			if !undone[h.SnapshotID] {
+				line = h
+			}
 		}
 	}
 	if line == nil {
+		if snapshot == "" && sawApplied {
+			return r.refuse(app.ErrNothingToUndo, app.Request{Action: app.ActionUndo}, app.Proposal{})
+		}
 		return fail("%s", text.UndoLineNotFound(target, snapshot))
 	}
 	req := app.Request{Action: app.ActionUndo, Snapshot: line.SnapshotID}
@@ -433,15 +469,27 @@ func (r *runner) undoV2(cmd *cobra.Command, ap approval, target, snapshot string
 // recoverV2 resolves a pending version 2 operation and tells what it did,
 // and whether a version 1 operation is still pending after it.
 func (r *runner) recoverV2(out io.Writer, a *app.App, rec app.Recovery, err error) error {
-	if err != nil {
+	if err != nil && !rec.V2.Resolved {
 		if msg, ok := text.Refusal(err, app.Request{}); ok {
 			return fail("%s", msg)
 		}
 		return fail("%s", text.RecoverFailed(err))
 	}
 	fmt.Fprint(out, text.Recovery(rec.V2))
-	if _, ok, err := a.Interrupted(); err == nil && ok {
+	if _, ok, ierr := a.Interrupted(); ierr == nil && ok {
 		fmt.Fprint(out, text.V1StillPending)
 	}
+	if err != nil {
+		fmt.Fprint(out, text.RecoverCleanupWarning(err))
+	}
 	return nil
+}
+
+func undoDetailSnapshot(detail string) string {
+	for _, f := range strings.Fields(detail) {
+		if id, ok := strings.CutPrefix(f, "undoes="); ok {
+			return id
+		}
+	}
+	return ""
 }
