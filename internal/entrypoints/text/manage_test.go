@@ -380,9 +380,31 @@ func TestTheWebRefusalsExplainThemselves(t *testing.T) {
 	if msg, _ := text.Refusal(&app.RefusalError{Kind: app.ErrAmbiguousSkill}, req); !strings.Contains(msg, "https://sitio@skill") {
 		t.Errorf("several skills on a site = %q", msg)
 	}
+	if msg, _ := text.Refusal(&app.RefusalError{
+		Kind: app.ErrAmbiguousSkill,
+		Choices: []app.InstallChoice{
+			{Name: "other", Source: "https://uizze.sh@other"},
+			{Name: "ui-taste", Source: "https://uizze.sh@ui-taste"},
+		},
+	}, req); !strings.Contains(msg, "https://sitio@skill") ||
+		!strings.Contains(msg, "other (https://uizze.sh@other)") ||
+		!strings.Contains(msg, "ui-taste (https://uizze.sh@ui-taste)") ||
+		!strings.Contains(msg, "\n") {
+		t.Errorf("several skills on a site with choices = %q", msg)
+	}
 	gh := app.Request{Action: app.ActionInstall, Install: &app.InstallRequest{Revision: app.Revision{Input: "https://github.com/acme/tools"}}}
 	if msg, _ := text.Refusal(&app.RefusalError{Kind: app.ErrAmbiguousSkill}, gh); !strings.Contains(msg, "owner/repo@skill") {
 		t.Errorf("several skills on GitHub = %q", msg)
+	}
+	if msg, _ := text.Refusal(&app.RefusalError{
+		Kind: app.ErrAmbiguousSkill,
+		Choices: []app.InstallChoice{
+			{Name: "alpha" + hostile, Folder: "skills/alpha", Source: "acme/tools/skills/alpha" + hostile},
+		},
+	}, gh); !strings.Contains(msg, "owner/repo@skill") {
+		t.Errorf("several skills on GitHub with choices = %q", msg)
+	} else {
+		assertEscaped(t, "ambiguous choices", msg)
 	}
 	insecure := app.Request{Action: app.ActionInstall, Install: &app.InstallRequest{Revision: app.Revision{Input: "http://uizze.sh@ui-taste"}}}
 	if msg, _ := text.Refusal(&app.RefusalError{Kind: app.ErrUnsupportedSource}, insecure); !strings.Contains(msg, "https") || !strings.Contains(msg, "http://") {

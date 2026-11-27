@@ -86,6 +86,13 @@ const (
 	NewPermissions = "Toda instalación lleva la etiqueta «permisos nuevos»: la skill entera es nueva en esta máquina, así que cada archivo cuenta como un permiso que no tenía.\n"
 )
 
+// Texts of the multi-skill install picker in the TUI (S11).
+const (
+	TUIInstallPickTitle  = "El origen contiene varias skills"
+	TUIInstallPickPrompt = "Elige la skill que quieres revisar antes de instalar:"
+	TUIKeysInstallPick   = "↑/↓ elegir · enter revisar · esc cancelar"
+)
+
 // PlanChanged explains engine and app ErrPlanChanged: the approved plan is
 // not the one planning gives now, and the new one never runs by itself.
 func PlanChanged(now string) string {
@@ -769,7 +776,18 @@ func Refusal(err error, req app.Request) (msg string, ok bool) {
 	}
 	for _, r := range refusalTexts {
 		if errors.Is(re.Kind, r.kind) {
-			return SafeLine(r.text(req, re.Related)), true
+			msg := SafeLine(r.text(req, re.Related))
+			if errors.Is(re.Kind, app.ErrAmbiguousSkill) {
+				if choices := app.InstallChoices(err); len(choices) > 0 {
+					var b strings.Builder
+					b.WriteString(msg)
+					for _, c := range choices {
+						fmt.Fprintf(&b, "\n  - %s (%s)", SafeLine(c.Name), SafeLine(c.Source))
+					}
+					return b.String(), true
+				}
+			}
+			return msg, true
 		}
 	}
 	return "", false

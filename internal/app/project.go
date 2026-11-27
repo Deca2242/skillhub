@@ -32,6 +32,7 @@ type ProjectSkillView struct {
 	Linked     bool
 	HasGit     bool
 	Reason     string
+	Links      []string
 }
 
 func normalizeProjectDir(p paths.Paths, raw string) string {
@@ -129,8 +130,30 @@ func (a *App) ProjectSkills() ([]ProjectSkillView, error) {
 	if len(byID) == 0 {
 		return nil, nil
 	}
+	absorbed := map[string]struct{}{}
+	for id, row := range byID {
+		if row.Linked || row.Name == "" || row.Root == "" {
+			continue
+		}
+		var links []string
+		if findErr := a.d.Project.FindLinksToSkill(a.projectDir, row.Root, row.Name, func(linkRoot, linkName, _, _ string) {
+			if linkRoot == "" || linkName == "" {
+				return
+			}
+			rel := linkRoot + "/" + linkName
+			links = append(links, rel)
+			absorbed["project:"+rel] = struct{}{}
+		}); findErr == nil && len(links) > 0 {
+			slices.Sort(links)
+			row.Links = slices.Compact(links)
+			byID[id] = row
+		}
+	}
 	out := make([]ProjectSkillView, 0, len(byID))
-	for _, v := range byID {
+	for id, v := range byID {
+		if _, skip := absorbed[id]; skip && v.Linked {
+			continue
+		}
 		out = append(out, v)
 	}
 	slices.SortFunc(out, func(x, y ProjectSkillView) int {

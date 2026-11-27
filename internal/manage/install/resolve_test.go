@@ -129,6 +129,54 @@ func TestResolveRefusesSeveralSkillsWithoutASelection(t *testing.T) {
 	if !slices.Equal(ae.Folders, []string{"skills/alpha", "skills/beta"}) {
 		t.Errorf("folders = %v, want skills/alpha and skills/beta", ae.Folders)
 	}
+	wantChoices := []install.SkillChoice{
+		{Name: "alpha", Folder: "skills/alpha", Source: "acme/catalog/skills/alpha"},
+		{Name: "Beta Skill", Folder: "skills/beta", Source: "acme/catalog/skills/beta"},
+	}
+	if !slices.Equal(ae.Choices, wantChoices) {
+		t.Errorf("choices = %+v, want %+v", ae.Choices, wantChoices)
+	}
+}
+
+func TestResolveAmbiguousChoicesWithRefAndRoot(t *testing.T) {
+	t.Run("pinned ref with subpath", func(t *testing.T) {
+		w := newWorld(t)
+		w.publish("acme/catalog", "main", catalog)
+
+		_, err := w.resolve("https://github.com/acme/catalog/tree/main")
+		var ae *install.AmbiguousSkillError
+		if !errors.As(err, &ae) {
+			t.Fatalf("err = %v, want *AmbiguousSkillError", err)
+		}
+		want := []install.SkillChoice{
+			{Name: "alpha", Folder: "skills/alpha", Source: "https://github.com/acme/catalog/tree/main/skills/alpha"},
+			{Name: "Beta Skill", Folder: "skills/beta", Source: "https://github.com/acme/catalog/tree/main/skills/beta"},
+		}
+		if !slices.Equal(ae.Choices, want) {
+			t.Errorf("choices = %+v, want %+v", ae.Choices, want)
+		}
+	})
+
+	t.Run("subpath without ref", func(t *testing.T) {
+		w := newWorld(t)
+		w.publish("acme/mono", "main", map[string]string{
+			"packages/tools/skills/a/SKILL.md": skillMD("alpha", "Alpha."),
+			"packages/tools/skills/b/SKILL.md": skillMD("beta", "Beta."),
+		})
+
+		_, err := w.resolve("acme/mono/packages/tools")
+		var ae *install.AmbiguousSkillError
+		if !errors.As(err, &ae) {
+			t.Fatalf("err = %v, want *AmbiguousSkillError", err)
+		}
+		want := []install.SkillChoice{
+			{Name: "alpha", Folder: "packages/tools/skills/a", Source: "acme/mono/packages/tools/skills/a"},
+			{Name: "beta", Folder: "packages/tools/skills/b", Source: "acme/mono/packages/tools/skills/b"},
+		}
+		if !slices.Equal(ae.Choices, want) {
+			t.Errorf("choices = %+v, want %+v", ae.Choices, want)
+		}
+	})
 }
 
 func TestResolveSelectsASkillByItsFrontmatterName(t *testing.T) {

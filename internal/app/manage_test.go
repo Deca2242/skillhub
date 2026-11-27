@@ -524,3 +524,33 @@ func TestVersion2NeedsItsPorts(t *testing.T) {
 		t.Fatalf("RecoverOperation without a version 2 record = %v, want the version 1 flow", err)
 	}
 }
+
+func TestResolveInstallAmbiguousReturnsInstallChoices(t *testing.T) {
+	m := newMachine(t)
+	m.gh.AddRepo("acme/catalog", "main")
+	writeTree(t, filepath.Join(m.upstream, "skills", "alpha"), map[string]string{
+		"SKILL.md": "---\nname: alpha\ndescription: Alpha.\n---\nalpha\n",
+	})
+	writeTree(t, filepath.Join(m.upstream, "skills", "beta"), map[string]string{
+		"SKILL.md": "---\nname: beta\ndescription: Beta.\n---\nbeta\n",
+	})
+	m.gh.Commit(t, "acme/catalog", "main", m.upstream)
+
+	_, err := m.app.ResolveInstall(bg, "acme/catalog")
+	if !errors.Is(err, app.ErrAmbiguousSkill) {
+		t.Fatalf("ResolveInstall err = %v, want ErrAmbiguousSkill", err)
+	}
+	want := []app.InstallChoice{
+		{Name: "alpha", Folder: "skills/alpha", Source: "acme/catalog/skills/alpha"},
+		{Name: "beta", Folder: "skills/beta", Source: "acme/catalog/skills/beta"},
+	}
+	if got := app.InstallChoices(err); !slices.Equal(got, want) {
+		t.Fatalf("InstallChoices = %+v, want %+v", got, want)
+	}
+	if got := app.InstallChoices(nil); got != nil {
+		t.Fatalf("InstallChoices(nil) = %+v, want nil", got)
+	}
+	if got := app.InstallChoices(errors.New("other")); got != nil {
+		t.Fatalf("InstallChoices(other) = %+v, want nil", got)
+	}
+}

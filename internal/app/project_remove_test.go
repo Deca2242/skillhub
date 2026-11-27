@@ -205,3 +205,52 @@ func TestAppProjectSkillsIgnoresSymlinkedStartupDirAndFlagsLinkedRoot(t *testing
 		t.Fatalf("symlink target mutated: %s -> %s", beforeTarget.SHA, afterTarget.SHA)
 	}
 }
+
+func TestAppProjectSkillsCollapsesInProjectSymlinks(t *testing.T) {
+	mc := newMachine(t)
+	parent := filepath.Dir(mc.h.Root())
+	proj := filepath.Join(parent, "proj-links")
+
+	fooReal := filepath.Join(proj, ".agents", "skills", "foo")
+	must(t, os.MkdirAll(fooReal, 0o755))
+	must(t, os.WriteFile(filepath.Join(fooReal, "SKILL.md"), []byte("---\nname: foo\n---\nfoo\n"), 0o644))
+
+	must(t, os.MkdirAll(filepath.Join(proj, ".claude", "skills"), 0o755))
+	must(t, os.Symlink("../../.agents/skills/foo", filepath.Join(proj, ".claude", "skills", "foo")))
+
+	extTarget := filepath.Join(parent, "ext-skill")
+	must(t, os.MkdirAll(extTarget, 0o755))
+	must(t, os.WriteFile(filepath.Join(extTarget, "SKILL.md"), []byte("ext\n"), 0o644))
+	must(t, os.Symlink(extTarget, filepath.Join(proj, ".agents", "skills", "ext-link")))
+
+	a := newProjectTestApp(t, mc, proj)
+	rows, err := a.ProjectSkills()
+	must(t, err)
+	if len(rows) != 2 {
+		t.Fatalf("ProjectSkills count = %d (%+v), want 2", len(rows), rows)
+	}
+	byID := map[string]app.ProjectSkillView{}
+	for _, r := range rows {
+		byID[r.ID] = r
+	}
+	if _, leaked := byID["project:.claude/skills/foo"]; leaked {
+		t.Fatalf("in-project symlink was not collapsed: %+v", rows)
+	}
+	foo, ok := byID["project:.agents/skills/foo"]
+	if !ok {
+		t.Fatalf("missing real skill row in %+v", rows)
+	}
+	if !foo.Removable || foo.Linked {
+		t.Errorf("foo = %+v, want Removable=true Linked=false", foo)
+	}
+	if len(foo.Links) != 1 || foo.Links[0] != ".claude/skills/foo" {
+		t.Errorf("foo.Links = %+v, want [\".claude/skills/foo\"]", foo.Links)
+	}
+	ext, ok := byID["project:.agents/skills/ext-link"]
+	if !ok {
+		t.Fatalf("missing external symlink row in %+v", rows)
+	}
+	if !ext.Linked || ext.Removable {
+		t.Errorf("ext-link = %+v, want Linked=true Removable=false", ext)
+	}
+}

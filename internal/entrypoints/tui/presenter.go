@@ -156,6 +156,10 @@ func PresentProjectSkills(ps []app.ProjectSkillView, query string) []SkillRow {
 		case !p.Removable:
 			kind = RowWarn
 			short = "proyecto · no elegible"
+		case len(p.Links) == 1:
+			short = "proyecto · 1 enlace"
+		case len(p.Links) > 1:
+			short = fmt.Sprintf("proyecto · %d enlaces", len(p.Links))
 		}
 		harns := text.SafeLine(p.Root)
 		if harns == "" {
@@ -206,6 +210,13 @@ func PresentProjectSkillDetail(p app.ProjectSkillView) string {
 	fmt.Fprintf(&b, "Carpeta: %s\n", text.SafeLine(p.Path))
 	if p.TreeSHA != "" {
 		fmt.Fprintf(&b, "Árbol: %s\n", ShortSHA(p.TreeSHA))
+	}
+	if len(p.Links) > 0 {
+		safeLinks := make([]string, len(p.Links))
+		for i, l := range p.Links {
+			safeLinks[i] = text.SafeLine(l)
+		}
+		fmt.Fprintf(&b, "Enlaces en este proyecto: %s\n", strings.Join(safeLinks, ", "))
 	}
 	if p.Removable {
 		b.WriteString("Estado: carpeta real elegible para eliminar ([e] Eliminar)\n")

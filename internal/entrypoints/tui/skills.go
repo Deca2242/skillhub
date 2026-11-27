@@ -322,6 +322,13 @@ func (m *Model) panelLines(width int) []string {
 		if proj.TreeSHA != "" {
 			lines = append(lines, wrap("Árbol: "+ShortSHA(proj.TreeSHA))...)
 		}
+		if len(proj.Links) > 0 {
+			safeLinks := make([]string, len(proj.Links))
+			for i, l := range proj.Links {
+				safeLinks[i] = text.SafeLine(l)
+			}
+			lines = append(lines, wrap("Enlaces en este proyecto: "+strings.Join(safeLinks, ", "))...)
+		}
 		for _, a := range m.rowActions(row) {
 			if !proj.Removable || a.key != "e" {
 				actions = append(actions, a.label)

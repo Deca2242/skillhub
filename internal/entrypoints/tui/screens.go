@@ -249,6 +249,8 @@ func (m *Model) renderInstall(boxW int) string {
 	case modeInstallSource:
 		return m.styles.box.Width(boxW).Render(step(1) + "\n\n" + text.TUIInstallSourceHelp + "\n\n" +
 			m.v2.source.View() + "\n\n" + text.TUIPromptHint)
+	case modeInstallPick:
+		return m.renderInstallPick(boxW)
 	case modeInstallReview:
 		// The plain summary comes before the files (S13).
 		rev := m.v2.revision
@@ -265,6 +267,41 @@ func (m *Model) renderInstall(boxW int) string {
 		return m.renderCatalog(boxW)
 	}
 	return m.styles.box.Width(boxW).Render(text.TUIInstallIntro)
+}
+
+func (m *Model) renderInstallPick(boxW int) string {
+	choices := m.v2.pickChoices
+	visible := max(3, m.height-12)
+	start := 0
+	if m.v2.cursor >= visible {
+		start = m.v2.cursor - visible + 1
+	}
+	end := min(len(choices), start+visible)
+	innerW := max(20, boxW-4)
+
+	var b strings.Builder
+	b.WriteString(m.styles.title.Render(text.TUIInstallPickTitle) + "\n")
+	b.WriteString(text.TUIInstallPickPrompt + "\n\n")
+	for i := start; i < end; i++ {
+		c := choices[i]
+		mark := "  "
+		if i == m.v2.cursor {
+			mark = "> "
+		}
+		name := text.SafeLine(c.Name)
+		source := text.SafeLine(c.Source)
+		var line string
+		if folder := text.SafeLine(c.Folder); folder != "" {
+			line = fmt.Sprintf("%s%s — %s (%s)", mark, name, folder, source)
+		} else {
+			line = fmt.Sprintf("%s%s (%s)", mark, name, source)
+		}
+		b.WriteString(ansi.Truncate(line, innerW, "…") + "\n")
+	}
+	if len(choices) > visible {
+		fmt.Fprintf(&b, "\n%d/%d", m.v2.cursor+1, len(choices))
+	}
+	return m.styles.box.Width(boxW).Render(strings.TrimRight(b.String(), "\n"))
 }
 
 // The Salud list of INV10 (S15 #9): Doctor's findings grouped first by the

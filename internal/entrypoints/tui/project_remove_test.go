@@ -378,20 +378,43 @@ func TestTUIProjectRemoveSymlinksAndUndo(t *testing.T) {
 
 	m := openSized(t, newProjectTUIApp(t, mc, proj), goldenWidth, 40)
 
-	// Selecting the symlink row must not offer remove and pressing e must not open a plan.
-	linkedScreen := selectProjectSkillRow(t, m, filepath.Join(proj, ".agents/skills/golang-code-style"), "enlace simbólico")
-	if strings.Contains(linkedScreen, text.TUIActionRemove) {
-		t.Fatalf("project symlink row wrongly offered remove:\n%s", linkedScreen)
-	}
-	beforeHome := mc.hash()
-	pressRun(m, "e")
-	if m.InPlanForTest() || mc.hash() != beforeHome {
-		t.Fatalf("e on project symlink row opened plan or mutated home:\n%s", screen(m))
+	// In-project pointing symlink is collapsed onto the real skill row (no duplicate "proyecto · enlace" row).
+	initScreen := screen(m)
+	if strings.Contains(flat(initScreen), "proyecto · enlace") {
+		t.Fatalf("collapsed in-project symlink still shown as separate row:\n%s", initScreen)
 	}
 
-	// Selecting the real folder row and pressing e opens preview showing both folder and symlink.
-	m = openSized(t, newProjectTUIApp(t, mc, proj), goldenWidth, 40)
-	selectProjectSkillRow(t, m, filepath.Join(proj, ".claude/skills/golang-code-style"), "Skill del proyecto actual (.claude/skills)")
+	// Selecting the real folder row shows the link indicator/paths in panel and detail,
+	// and pressing e opens preview showing both folder and symlink.
+	panelScreen := selectProjectSkillRow(t, m, filepath.Join(proj, ".claude/skills/golang-code-style"), "Skill del proyecto actual (.claude/skills)", "Enlaces en este proyecto: .agents/skills/golang-code-style")
+	if !strings.Contains(flat(panelScreen), "1 enlace") {
+		t.Errorf("real project skill row/panel missing link indicator:\n%s", panelScreen)
+	}
+	rows := tui.PresentProjectSkills([]app.ProjectSkillView{{
+		ID:         "project:.claude/skills/golang-code-style",
+		Name:       "golang-code-style",
+		ProjectDir: proj,
+		Root:       ".claude/skills",
+		Path:       filepath.Join(proj, ".claude/skills/golang-code-style"),
+		Removable:  true,
+		Links:      []string{".agents/skills/golang-code-style"},
+	}}, "")
+	if len(rows) != 1 || rows[0].Short != "proyecto · 1 enlace" {
+		t.Errorf("PresentProjectSkills = %+v, want Short=%q", rows, "proyecto · 1 enlace")
+	}
+	detail := tui.PresentProjectSkillDetail(app.ProjectSkillView{
+		ID:         "project:.claude/skills/golang-code-style",
+		Name:       "golang-code-style",
+		ProjectDir: proj,
+		Root:       ".claude/skills",
+		Path:       filepath.Join(proj, ".claude/skills/golang-code-style"),
+		Removable:  true,
+		Links:      []string{".agents/skills/golang-code-style"},
+	})
+	if !strings.Contains(detail, "Enlaces en este proyecto: .agents/skills/golang-code-style") {
+		t.Errorf("PresentProjectSkillDetail missing links:\n%s", detail)
+	}
+
 	pressRun(m, "e")
 	if !m.InPlanForTest() {
 		t.Fatalf("e on real project skill did not open plan; status=%q", m.StatusForTest())

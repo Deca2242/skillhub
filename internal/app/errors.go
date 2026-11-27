@@ -2,6 +2,7 @@ package app
 
 import (
 	"errors"
+	"slices"
 
 	"skillhub/internal/manage/engine"
 	"skillhub/internal/manage/install"
@@ -154,15 +155,24 @@ var refusals = []struct {
 	{ErrCrossDevice, []error{ports.ErrCrossDevice}},
 }
 
+// InstallChoice identifies one skill inside an ambiguous install source.
+type InstallChoice struct {
+	Name   string
+	Folder string
+	Source string
+}
+
 // RefusalError is a refusal of a version 2 operation. Kind is one of the
 // Err* kinds above; Err is the planner's or the engine's error, kept whole.
 // Related names what the user may act on: the disabled neighbours to enable
 // first (ErrNeighbourParked) or the paths that hold the key
-// (ErrKeyReinstalled, ErrKeyExists).
+// (ErrKeyReinstalled, ErrKeyExists). Choices lists the selectable skills
+// when Kind is ErrAmbiguousSkill.
 type RefusalError struct {
 	Kind    error
 	Err     error
 	Related []string
+	Choices []InstallChoice
 }
 
 func (e *RefusalError) Error() string { return e.Err.Error() }
@@ -183,7 +193,12 @@ func refusal(err error) error {
 	for _, r := range refusals {
 		for _, c := range r.causes {
 			if errors.Is(err, c) {
-				return &RefusalError{Kind: r.kind, Err: err, Related: related(err)}
+				return &RefusalError{
+					Kind:    r.kind,
+					Err:     err,
+					Related: related(err),
+					Choices: installChoices(err),
+				}
 			}
 		}
 	}
@@ -220,4 +235,26 @@ func related(err error) []string {
 		return []string{wpe.OpProjectDir}
 	}
 	return nil
+}
+
+func installChoices(err error) []InstallChoice {
+	var ae *install.AmbiguousSkillError
+	if !errors.As(err, &ae) || len(ae.Choices) == 0 {
+		return nil
+	}
+	out := make([]InstallChoice, len(ae.Choices))
+	for i, c := range ae.Choices {
+		out[i] = InstallChoice{Name: c.Name, Folder: c.Folder, Source: c.Source}
+	}
+	return out
+}
+
+// InstallChoices returns the selectable skills of an ambiguous install
+// refusal, or nil when err carries none.
+func InstallChoices(err error) []InstallChoice {
+	var re *RefusalError
+	if errors.As(err, &re) && len(re.Choices) > 0 {
+		return slices.Clone(re.Choices)
+	}
+	return installChoices(err)
 }

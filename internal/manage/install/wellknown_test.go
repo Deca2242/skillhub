@@ -320,6 +320,13 @@ func TestResolveSelectsOneSkill(t *testing.T) {
 		if !ok || !slices.Equal(ae.Folders, []string{"other", "ui-taste"}) {
 			t.Fatalf("Resolve = %v, want the two skills listed", err)
 		}
+		wantChoices := []install.SkillChoice{
+			{Name: "other", Folder: "", Source: "https://uizze.sh@other"},
+			{Name: "ui-taste", Folder: "", Source: "https://uizze.sh@ui-taste"},
+		}
+		if !slices.Equal(ae.Choices, wantChoices) {
+			t.Fatalf("choices = %+v, want %+v", ae.Choices, wantChoices)
+		}
 	})
 	t.Run("a name it does not publish", func(t *testing.T) {
 		w := fakes.NewWeb()

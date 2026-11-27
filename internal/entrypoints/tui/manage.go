@@ -35,8 +35,9 @@ type manage struct {
 	plan     app.Proposal
 	planView viewport.Model
 
-	source   textinput.Model
-	revision app.Revision
+	source      textinput.Model
+	pickChoices []app.InstallChoice
+	revision    app.Revision
 	// checks are the agent check boxes on screen (checks.go), of a skill or
 	// of an install's step 3; chain is the rest of a choice of agents.
 	checks checks
@@ -598,6 +599,15 @@ func (m *Model) handleResolved(msg resolvedMsg) {
 		return
 	}
 	if msg.err != nil {
+		if errors.Is(msg.err, app.ErrAmbiguousSkill) {
+			if choices := app.InstallChoices(msg.err); len(choices) > 0 {
+				m.v2.pickChoices = choices
+				m.v2.cursor = 0
+				m.mode = modeInstallPick
+				m.status = ""
+				return
+			}
+		}
 		m.status = explainManage(msg.err, app.Request{Action: app.ActionInstall})
 		return
 	}
@@ -607,6 +617,42 @@ func (m *Model) handleResolved(msg resolvedMsg) {
 	m.v2.review.GotoTop()
 	m.v2.checks = installChecks(msg.targets, msg.readers)
 	m.mode = modeInstallReview
+}
+
+func (m *Model) handleInstallPickKey(k string) (tea.Model, tea.Cmd) {
+	n := len(m.v2.pickChoices)
+	switch k {
+	case "up", "k":
+		if m.v2.cursor > 0 {
+			m.v2.cursor--
+		}
+	case "down", "j":
+		if m.v2.cursor < n-1 {
+			m.v2.cursor++
+		}
+	case "home":
+		m.v2.cursor = 0
+	case "end":
+		if n > 0 {
+			m.v2.cursor = n - 1
+		}
+	case "esc":
+		m.mode = modeNormal
+		m.v2.pickChoices = nil
+		m.v2.cursor = 0
+	case "enter":
+		if m.busy || m.v2.cursor < 0 || m.v2.cursor >= n {
+			return m, nil
+		}
+		choice := m.v2.pickChoices[m.v2.cursor]
+		m.v2.pickChoices = nil
+		m.v2.cursor = 0
+		m.mode = modeNormal
+		m.busy = true
+		m.status = text.TUIResolving
+		return m, resolveCmd(m.app, choice.Source, m.ask())
+	}
+	return m, nil
 }
 
 func (m *Model) handleInstallReviewKey(k string, msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {

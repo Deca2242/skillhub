@@ -20,11 +20,21 @@ var (
 	ErrAmbiguousSkill = errors.New("several skills found at the source")
 )
 
+// SkillChoice identifies one skill inside a multi-skill source, with an
+// unambiguous source string accepted by Parse and Resolve.
+type SkillChoice struct {
+	Name   string
+	Folder string
+	Source string
+}
+
 // AmbiguousSkillError lists the skill folders a source holds when it must
 // hold one: no name was selected, or several skills have that name.
 type AmbiguousSkillError struct {
 	// Folders are relative to the repository root, sorted.
 	Folders []string
+	// Choices are the selectable skills in the same deterministic order.
+	Choices []SkillChoice
 }
 
 func (e *AmbiguousSkillError) Error() string {
@@ -182,7 +192,24 @@ func (r Resolver) locate(ctx context.Context, res Resolved, nodes []treehash.Nod
 	}
 	ae := &AmbiguousSkillError{}
 	for _, i := range picked {
-		ae.Folders = append(ae.Folders, joinPath(res.Subpath, folders[i]))
+		folder := joinPath(res.Subpath, folders[i])
+		var source string
+		if res.Ref != "" {
+			source = "https://github.com/" + res.Repo + "/tree/" + res.Ref
+			if folder != "" {
+				source += "/" + folder
+			}
+		} else if folder != "" {
+			source = res.Repo + "/" + folder
+		} else {
+			source = res.Repo + "@" + names[i]
+		}
+		ae.Folders = append(ae.Folders, folder)
+		ae.Choices = append(ae.Choices, SkillChoice{
+			Name:   names[i],
+			Folder: folder,
+			Source: source,
+		})
 	}
 	return "", "", ae
 }

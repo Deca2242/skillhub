@@ -42,6 +42,7 @@ const (
 	modePlan
 	modeCatalogSearch
 	modeInstallSource
+	modeInstallPick
 	modeInstallReview
 	modeInstallTargets
 	modeRepairs
@@ -396,7 +397,33 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyPressMsg:
 		return m.handleKey(msg)
 	}
+	if input := m.activeTextInput(); input != nil {
+		prev := input.Value()
+		var cmd tea.Cmd
+		*input, cmd = input.Update(msg)
+		if m.mode == modeFilter && input.Value() != prev {
+			m.refreshTables()
+		}
+		return m, cmd
+	}
 	return m, nil
+}
+
+func (m *Model) activeTextInput() *textinput.Model {
+	switch m.mode {
+	case modeFilter:
+		return &m.filterInput
+	case modeEditInterval:
+		return &m.intervalInput
+	case modePrompt:
+		return &m.v2.prompt
+	case modeCatalogSearch:
+		return &m.catalogInput
+	case modeInstallSource:
+		return &m.v2.source
+	default:
+		return nil
+	}
 }
 
 func (m *Model) handleDataLoaded(msg dataLoadedMsg) *Model {
@@ -641,6 +668,8 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.handleCatalogSearchKey(msg)
 	case modeInstallSource, modeInstallTargets:
 		return m.handleInstallInputKey(msg)
+	case modeInstallPick:
+		return m.handleInstallPickKey(k)
 	case modeInstallReview:
 		return m.handleInstallReviewKey(k, msg)
 	case modeRepairs, modeCanonical:
@@ -1256,6 +1285,8 @@ func (m *Model) renderFooter() string {
 		keys = text.TUIKeysCompareSkills
 	case modeChecks, modeInstallTargets, modeUnignore:
 		keys = text.TUIKeysChecks
+	case modeInstallPick:
+		keys = text.TUIKeysInstallPick
 	}
 	var parts []string
 	if m.status != "" {

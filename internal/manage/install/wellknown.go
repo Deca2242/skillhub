@@ -390,6 +390,12 @@ func pickEntry(idx WebIndex, src Source) (WebEntry, error) {
 			ae.Folders = append(ae.Folders, e.Name)
 		}
 		slices.Sort(ae.Folders)
+		for _, name := range ae.Folders {
+			ae.Choices = append(ae.Choices, SkillChoice{
+				Name:   name,
+				Source: src.Site + "@" + name,
+			})
+		}
 		return WebEntry{}, ae
 	}
 	for _, e := range idx.Entries {
