@@ -244,7 +244,8 @@ func TestTUIRefusesGitCloneRemoval(t *testing.T) {
 
 // A skill in a confirmed Claude Code plugin zone shows "proveedor" in the list
 // and "Gestionada por…" with concrete Claude plugin CLI guidance in the panel,
-// without offering removal.
+// and offers [e] Eliminar opening the clone-removal confirmation with provider
+// warning, clone path, and affected skills without writing anything.
 func TestTUIPluginSkillShowsProviderAndGuidance(t *testing.T) {
 	mc := newMachine(t)
 	m := openSized(t, mc.newApp(), 120, 40)
@@ -258,19 +259,37 @@ func TestTUIPluginSkillShowsProviderAndGuidance(t *testing.T) {
 		"claude plugin list",
 		"claude plugin uninstall",
 		"plugin completo",
+		text.TUIActionRemove,
+		text.TUIKeyRemove,
 	} {
 		if !strings.Contains(flat(got), flat(want)) {
 			t.Errorf("karpathy-guidelines screen lacks %q:\n%s", want, got)
 		}
 	}
-	if strings.Contains(got, text.TUIActionRemove) {
-		t.Errorf("plugin skill wrongly offered remove:\n%s", got)
-	}
 
 	before := mc.hash()
 	pressRun(m, "e")
+	if !m.InPlanForTest() {
+		t.Fatalf("e on plugin skill did not open confirmation plan; status=%q", m.StatusForTest())
+	}
+	if mc.hash() != before {
+		t.Fatal("opening plan on plugin skill wrote something")
+	}
+
+	confirm := strings.ReplaceAll(flat(screen(m)), "- ", "-")
+	for _, want := range []string{
+		"Aviso de proveedor (Claude Code (plugin))",
+		mc.h.Path(graphtest.KarpathyClone),
+		"karpathy-guidelines",
+	} {
+		if !strings.Contains(confirm, flat(want)) {
+			t.Errorf("plugin confirmation lacks %q:\n%s", want, screen(m))
+		}
+	}
+
+	pressRun(m, "n")
 	if m.InPlanForTest() || mc.hash() != before {
-		t.Fatalf("e on plugin skill planned or wrote:\n%s", screen(m))
+		t.Fatal("cancelling plugin removal left plan open or wrote something")
 	}
 }
 

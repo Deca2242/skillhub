@@ -166,7 +166,7 @@ func (r *runner) skillsCmd() *cobra.Command {
 	return group("skills", text.SkillsShort,
 		r.skillsShowCmd(),
 		r.installCmd(),
-		r.keyCmd(text.RemoveUse, text.RemoveShort, text.RemoveLong, app.ActionRemove),
+		r.removeCmd(),
 		r.keyCmd(text.DisableUse, text.DisableShort, text.DisableLong, app.ActionDisable),
 		r.keyCmd(text.EnableUse, text.EnableShort, "", app.ActionEnable),
 		r.linkCmd(text.UnlinkUse, text.UnlinkShort, text.UnlinkLong, app.ActionUnlink, "from", text.FlagFrom),
@@ -186,6 +186,26 @@ func (r *runner) keyCmd(use, short, long string, action app.Action) *cobra.Comma
 			return r.planned(cmd, ap, app.Request{Action: action, Key: args[0]})
 		},
 	}
+	ap.flags(c)
+	return c
+}
+
+// removeCmd removes one skill by exact target or store key, optionally
+// authorizing confirmed provider zones via --allow-provider.
+func (r *runner) removeCmd() *cobra.Command {
+	var ap approval
+	var allowProvider bool
+	c := &cobra.Command{
+		Use: text.RemoveUse, Short: text.RemoveShort, Long: text.RemoveLong, Args: exactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return r.planned(cmd, ap, app.Request{
+				Action:        app.ActionRemove,
+				Key:           args[0],
+				AllowProvider: allowProvider,
+			})
+		},
+	}
+	c.Flags().BoolVar(&allowProvider, "allow-provider", false, text.FlagAllowProvider)
 	ap.flags(c)
 	return c
 }

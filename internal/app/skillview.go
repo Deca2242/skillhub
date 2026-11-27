@@ -382,24 +382,40 @@ func (m *manager) skillActions(g graph.Graph, found []doctor.Finding) (map[strin
 		entry := folders[s.Canonical].Entry
 		switch dir, base := filepath.Dir(entry), filepath.Base(entry); {
 		case s.Canonical == "":
-			if len(s.Folders) == 1 && (s.Zone == graph.ZoneNone || s.Zone == graph.ZoneProfile) {
+			allowProvider := s.Zone == graph.ZoneGentle || s.Zone == graph.ZonePlugin || s.Zone == graph.ZoneProvider
+			if len(s.Folders) == 1 && (s.Zone == graph.ZoneNone || s.Zone == graph.ZoneProfile || allowProvider) {
 				if rel, ok := a.d.Paths.HomeRel(folders[s.Folders[0]].Entry); ok {
 					target := domain.DirID(rel)
-					if _, err := m.remove.Remove(target); err == nil {
+					if _, err := m.remove.RemoveWithOptions(target, remove.Options{AllowProvider: allowProvider}); err == nil {
 						acts.Remove = true
 						acts.RemoveKey = target
 					}
 				}
-			} else if len(s.Folders) > 1 && (s.Zone == graph.ZoneNone || s.Zone == graph.ZoneProfile) {
-				if _, err := m.remove.RemoveGroup(s.ID); err == nil {
+			} else if len(s.Folders) > 1 && (s.Zone == graph.ZoneNone || s.Zone == graph.ZoneProfile || allowProvider) {
+				if _, err := m.remove.RemoveGroupWithOptions(s.ID, remove.Options{AllowProvider: allowProvider}); err == nil {
 					acts.RemoveGroup = true
 					acts.RemoveGroupID = s.ID
 				}
 			}
 		case dir == g.Store:
 			acts = m.storeActions(g, base, entry)
+			allowProvider := s.Zone == graph.ZoneGentle || s.Zone == graph.ZonePlugin || s.Zone == graph.ZoneProvider
+			if allowProvider && !acts.Remove && len(s.Folders) <= 1 {
+				target := base
+				if s.Origin == domain.OriginGitClone {
+					target = s.ID
+				} else if s.LockKey != "" {
+					target = domain.LockID(s.LockKey)
+				} else if rel, ok := a.d.Paths.HomeRel(entry); ok {
+					target = domain.DirID(rel)
+				}
+				if _, err := m.remove.RemoveWithOptions(target, remove.Options{AllowProvider: true}); err == nil {
+					acts.Remove = true
+					acts.RemoveKey = target
+				}
+			}
 			if len(s.Folders) > 1 {
-				if _, err := m.remove.RemoveGroup(s.ID); err == nil {
+				if _, err := m.remove.RemoveGroupWithOptions(s.ID, remove.Options{AllowProvider: allowProvider}); err == nil {
 					acts.RemoveGroup = true
 					acts.RemoveGroupID = s.ID
 				}
@@ -408,17 +424,41 @@ func (m *manager) skillActions(g graph.Graph, found []doctor.Finding) (map[strin
 			if slices.Contains(offKeys, base) {
 				acts.Off, acts.OffKey, acts.OffKeys = true, base, slices.Clone(offKeys)
 			}
-			if rel, ok := a.d.Paths.HomeRel(entry); ok {
+			allowProvider := s.Zone == graph.ZoneGentle || s.Zone == graph.ZonePlugin || s.Zone == graph.ZoneProvider
+			if allowProvider && s.Origin == domain.OriginGitClone {
+				if _, err := m.remove.RemoveWithOptions(s.ID, remove.Options{AllowProvider: true}); err == nil {
+					acts.Remove = true
+					acts.RemoveKey = s.ID
+				}
+			} else if rel, ok := a.d.Paths.HomeRel(entry); ok {
 				target := domain.DirID(rel)
-				if _, err := m.remove.Remove(target); err == nil {
+				if _, err := m.remove.RemoveWithOptions(target, remove.Options{AllowProvider: allowProvider}); err == nil {
 					acts.Remove = true
 					acts.RemoveKey = target
 				}
 			}
 			if len(s.Folders) > 1 {
-				if _, err := m.remove.RemoveGroup(s.ID); err == nil {
+				if _, err := m.remove.RemoveGroupWithOptions(s.ID, remove.Options{AllowProvider: allowProvider}); err == nil {
 					acts.RemoveGroup = true
 					acts.RemoveGroupID = s.ID
+				}
+			}
+		case s.Zone == graph.ZoneGentle || s.Zone == graph.ZonePlugin || s.Zone == graph.ZoneProvider:
+			if len(s.Folders) > 1 {
+				if _, err := m.remove.RemoveGroupWithOptions(s.ID, remove.Options{AllowProvider: true}); err == nil {
+					acts.RemoveGroup = true
+					acts.RemoveGroupID = s.ID
+				}
+			} else if s.Origin == domain.OriginGitClone {
+				if _, err := m.remove.RemoveWithOptions(s.ID, remove.Options{AllowProvider: true}); err == nil {
+					acts.Remove = true
+					acts.RemoveKey = s.ID
+				}
+			} else if rel, ok := a.d.Paths.HomeRel(entry); ok {
+				target := domain.DirID(rel)
+				if _, err := m.remove.RemoveWithOptions(target, remove.Options{AllowProvider: true}); err == nil {
+					acts.Remove = true
+					acts.RemoveKey = target
 				}
 			}
 		}
@@ -439,6 +479,30 @@ func (m *manager) skillActions(g graph.Graph, found []doctor.Finding) (map[strin
 				}
 			}
 		}
+	}
+	for _, b := range g.Boundary {
+		if b.Zone != graph.ZoneGentle && b.Zone != graph.ZonePlugin && b.Zone != graph.ZoneProvider {
+			continue
+		}
+		rel, ok := a.d.Paths.HomeRel(b.Path)
+		if !ok {
+			continue
+		}
+		id := domain.DirID(rel)
+		acts := out[id]
+		if acts.Provider != "" && acts.Remove {
+			continue
+		}
+		if acts.Provider == "" {
+			acts.Provider = a.providerForZone(b.Zone, b.Path)
+		}
+		if !acts.Remove {
+			if _, err := m.remove.RemoveWithOptions(id, remove.Options{AllowProvider: true}); err == nil {
+				acts.Remove = true
+				acts.RemoveKey = id
+			}
+		}
+		out[id] = acts
 	}
 	return out, nil
 }
@@ -465,16 +529,20 @@ func (a *App) providerOf(s graph.Skill, entry string) string {
 	if s.Canonical == "" {
 		return ""
 	}
-	switch s.Zone {
+	if p := a.providerForZone(s.Zone, entry); p != "" {
+		return p
+	}
+	return a.providerForZone(s.Zone, s.Canonical)
+}
+
+func (a *App) providerForZone(zone graph.Zone, entry string) string {
+	switch zone {
 	case graph.ZonePlugin:
 		return ProviderClaudePlugin
 	case graph.ZoneGentle, graph.ZoneShared:
 		return ProviderGentleAI
 	case graph.ZoneProvider:
 		rel, ok := a.d.Paths.HomeRel(entry)
-		if !ok && s.Canonical != "" {
-			rel, ok = a.d.Paths.HomeRel(s.Canonical)
-		}
 		if !ok {
 			return ""
 		}

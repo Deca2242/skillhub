@@ -261,7 +261,7 @@ skillhub background disable [--dry-run]     la desactiva y borra sus unidades de
 
 skillhub skills show <skill> [--json]                  estado, agentes que la ven, origen y actividad
 skillhub skills install <origen> [--to <harness>...]   instala desde GitHub o un sitio web tras revisarla
-skillhub skills remove <skill>                         elimina una skill independiente (global o del proyecto actual)
+skillhub skills remove <skill> [--allow-provider]      elimina una skill independiente (o de proveedor con --allow-provider)
 skillhub skills disable <skill>                        la desactiva en todos sus destinos gestionados
 skillhub skills enable <skill>                         la activa con los enlaces que tenía
 skillhub skills link <skill> --to <harness>            la enlaza en un agente
@@ -286,7 +286,12 @@ comas.
 niega y lista los `id`: vuelve a ejecutarlo con el `id` que quieras. En `skills remove` puedes indicar la
 clave del almacén o el identificador exacto (`dir:<ruta>`, `lock:<nombre>`, `parked:<clave>`,
 `project:.agents/skills/<nombre>` o `project:.claude/skills/<nombre>`); ante cualquier ambigüedad se niega
-en lugar de eliminar varias copias por nombre.
+en lugar de eliminar varias copias por nombre. Las skills en zonas de proveedor se rechazan por defecto;
+con `--allow-provider` puedes planificar su eliminación reversible (muestra un aviso explícito de que solo
+borra archivos del disco sin actualizar el estado ni el manifiesto del proveedor, y se deshace con `skillhub undo`).
+Si una skill de proveedor vive dentro de un clon de Git (`git:<ruta>`), `--allow-provider` elimina la
+carpeta raíz completa del clon de forma reversible avisando qué skills incluye.
+`_shared/`, los perfiles de diagnóstico, los enlaces simbólicos y los clones de git no-proveedor siguen bloqueados.
 
 ### Salida JSON de `skills show`
 
@@ -404,10 +409,13 @@ destino que no lee el almacén directamente la ve por un enlace simbólico.
   identificador exacto (`dir:<ruta>`, `lock:<nombre>`, `parked:<clave>`, `project:.agents/skills/<nombre>`
   o `project:.claude/skills/<nombre>`). La confirmación muestra las rutas exactas, quita solo los enlaces
   propios seguros y la carpeta elegida, y no altera entradas del lock, homónimos globales ni copias de
-  otros ámbitos. Rechaza rutas arbitrarias, raíces o copias enlazadas simbólicamente, otros proyectos
-  (superiores o vecinos), copias de proveedores o perfiles, y clones de git (o carpetas con `.git`). Para
-  deshacer o recuperar una operación de proyecto, debes volver a abrir skillhub en ese mismo proyecto. Si
-  la eliminación se completó pero falló marcar como reemplazadas sus actualizaciones pendientes, se informa
+  otros ámbitos. Al eliminar una carpeta real del proyecto actual, también quita los enlaces simbólicos
+  directos del mismo proyecto que apuntan a esa carpeta para no dejar enlaces rotos (sin tocar enlaces que
+  apuntan a otro sitio), y `undo` (o `z` en la TUI) restaura tanto la carpeta como esos enlaces con su
+  destino exacto. Rechaza rutas arbitrarias, raíces o copias enlazadas simbólicamente (elegir directamente
+  un enlace sigue rechazándose), otros proyectos (superiores o vecinos), copias de proveedores o perfiles,
+  y clones de git (o carpetas con `.git`). Para deshacer o recuperar una operación de proyecto, debes
+  volver a abrir skillhub en ese mismo proyecto. Si la eliminación se completó pero falló marcar como reemplazadas sus actualizaciones pendientes, se informa
   como un éxito con un aviso. Eliminar una skill desactivada sin carpeta (una entrada guardada aparte con
   la reparación `park_entry`) descarta solo su registro; el plan lo indica con «Sin carpeta».
 - **Doctor** solo lee. `doctor fix` aplica la única reparación que admite el hallazgo; si admite varias,
@@ -458,13 +466,16 @@ destino que no lee el almacén directamente la ve por un enlace simbólico.
   derecha, el panel de la skill: primero su situación y el paso recomendado, después su descripción, los
   agentes que la ven de verdad, su origen y las acciones que admite. El panel solo ofrece acciones que la
   app puede planificar para esa fila; las skills gestionadas por un proveedor o plugin (como un plugin de
-  Claude Code o `gentle-ai`) indican quién las gestiona y a qué superficie o documentación acudir, sin
-  ofrecer acciones que skillhub no pueda verificar. `/` busca,
+  Claude Code o `gentle-ai`) muestran la etiqueta `proveedor` e indican quién las gestiona y a qué
+  superficie acudir, y cuando pertenecen a un proveedor confirmado permiten eliminarlas con `e` mostrando
+  un aviso explícito antes de confirmar (en plugins o skills de proveedor instalados como clon de Git,
+  elimina la carpeta completa del clon de forma reversible indicando qué skills incluye). `/` busca,
   `f` filtra por estado (todas, activas, desactivadas, con
   problemas, con actualización, ignoradas) y `g` muestra solo lo que ve un agente («Qué ve Claude
   Code»). Por debajo de 100 columnas, el panel va debajo de la lista.
 - **Teclas de Skills:** `d` desactivar, `a` activar, `e` eliminar (disponible para skills del almacén,
   desactivadas, en `OFF/`, carpetas globales independientes de un agente que no sean clones de git,
+  copias reales y clones de Git de proveedores confirmados con aviso explícito y respaldo reversible,
   carpetas reales directas en `.agents/skills` o `.claude/skills` del proyecto actual y filas del filtro
   «ignoradas», manteniendo la lista `ignore` en `settings.toml`), `l` elegir en qué agentes está
   (casillas: espacio marca, `enter` confirma; cada enlace que cambia es un plan con su propia

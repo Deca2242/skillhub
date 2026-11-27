@@ -63,13 +63,15 @@ func toggleView(pv toggle.Preview) *TogglePreview {
 	return out
 }
 
-func removeView(pv remove.Preview) *RemovePreview {
+func removeView(pv remove.Preview, provider string) *RemovePreview {
 	out := &RemovePreview{
 		Key: pv.Key, Project: pv.Project, ProjectDir: pv.ProjectDir, ProjectRoot: pv.ProjectRoot, SkillName: pv.SkillName,
 		Parked: pv.Parked, Off: pv.Off, Folder: pv.Folder, TreeSHA: pv.TreeSHA, ParkedEntry: pv.ParkedEntry,
 		Modified: string(pv.Modified.State), ModifiedExpected: pv.Modified.Expected, ModifiedActual: pv.Modified.Actual,
 		PendingCandidates: slices.Clone(pv.PendingCandidates), Targets: slices.Clone(pv.Targets),
 		Group: pv.Group, SkillID: pv.SkillID, RetainedTargets: slices.Clone(pv.RetainedTargets),
+		Clone: pv.Clone, CloneSkills: slices.Clone(pv.CloneSkills),
+		Provider: provider,
 	}
 	for _, f := range pv.Folders {
 		out.Folders = append(out.Folders, RemovedFolder{

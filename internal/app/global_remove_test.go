@@ -147,7 +147,6 @@ func TestSkillActionsGlobalRemoveEligibility(t *testing.T) {
 	}
 
 	wantNoOffer := []string{
-		"git:" + graphtest.KarpathySkill,
 		"dir:.claude/skills/custom-git",
 		"dir:.claude-omni/skills/orca-cli",
 	}
@@ -383,8 +382,8 @@ func TestSkillActionsProviderAttribution(t *testing.T) {
 	if pluginAct.Provider != app.ProviderClaudePlugin {
 		t.Errorf("karpathy Provider = %q, want %q", pluginAct.Provider, app.ProviderClaudePlugin)
 	}
-	if pluginAct.Remove || pluginAct.Manual {
-		t.Errorf("karpathy Remove=%v Manual=%v, want false, false", pluginAct.Remove, pluginAct.Manual)
+	if !pluginAct.Remove || pluginAct.RemoveKey != "git:"+graphtest.KarpathySkill || pluginAct.Manual {
+		t.Errorf("karpathy Remove=%v RemoveKey=%q Manual=%v, want true, %q, false", pluginAct.Remove, pluginAct.RemoveKey, pluginAct.Manual, "git:"+graphtest.KarpathySkill)
 	}
 
 	for _, id := range []string{

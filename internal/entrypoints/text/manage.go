@@ -22,9 +22,9 @@ const (
 	InstallUse    = "install <origen> [--to <harness>...] [--dry-run] [--yes --plan <id>]"
 	InstallShort  = "Instala una skill desde GitHub o desde un sitio web tras revisarla"
 	InstallLong   = "Resuelve el origen, de GitHub (owner/repo, owner/repo@skill, owner/repo/ruta o la URL github.com/o/r/tree/ref/ruta) o de un sitio web que publica sus skills en /.well-known/agent-skills/ (https://sitio@skill, por ejemplo https://uizze.sh@ui-taste; sin @skill, el sitio debe publicar una sola), prepara la skill y muestra su revisión completa: archivos, etiquetas de riesgo y diff contra una carpeta vacía. Después muestra el plan (mover la copia revisada al almacén, crear los enlaces y añadir la entrada del lock) y pide confirmación. Sin --to, los destinos son los harness detectados que se proponen; es una propuesta que apruebas con el plan, nunca un permiso automático. Un sitio web se lee solo por https, con curl y con límites de tamaño; las actualizaciones de sus skills todavía no se revisan."
-	RemoveUse     = "remove <skill> [--dry-run] [--yes --plan <id>]"
+	RemoveUse     = "remove <skill> [--allow-provider] [--dry-run] [--yes --plan <id>]"
 	RemoveShort   = "Elimina una skill independiente (global o del proyecto actual)"
-	RemoveLong    = "Quita los enlaces que apuntan a la carpeta elegida, borra esa carpeta y, cuando corresponde, quita su entrada del lock. Acepta una clave del almacén o aparcada (<clave>), o un identificador exacto: dir:<ruta> (carpeta global directa en el almacén, en OFF/ o en el directorio de un agente), lock:<nombre>, parked:<clave>, project:.agents/skills/<nombre> o project:.claude/skills/<nombre>. Nunca elimina varias copias por nombre ni toca clones de git, enlaces simbólicos, otros proyectos, proveedores ni perfiles. Todo queda en un snapshot y se deshace con «skillhub undo» (una skill de proyecto requiere ejecutarlo en ese mismo proyecto). Las copias con el mismo nombre en otros ámbitos o agentes no se tocan: se informan. Una actualización pendiente de la skill pasa a reemplazada."
+	RemoveLong    = "Quita los enlaces que apuntan a la carpeta elegida, borra esa carpeta y, cuando corresponde, quita su entrada del lock. Acepta una clave del almacén o aparcada (<clave>), o un identificador exacto: dir:<ruta> (carpeta global directa en el almacén, en OFF/ o en el directorio de un agente), lock:<nombre>, parked:<clave>, project:.agents/skills/<nombre> o project:.claude/skills/<nombre>. Por defecto rechaza zonas de proveedor; con --allow-provider permite planificar la eliminación reversible de skills en zonas de proveedor confirmadas (gentle-ai, plugins o synced), mostrando un aviso explícito de que solo borra archivos del disco sin actualizar el estado ni el manifiesto del proveedor. Al eliminar una carpeta real del proyecto actual (project:.agents/skills/<nombre> o project:.claude/skills/<nombre>), también quita los enlaces simbólicos directos del mismo proyecto que apuntan a esa carpeta para no dejar enlaces rotos; elegir directamente un enlace sigue rechazándose. Nunca elimina varias copias por nombre ni toca clones de git, enlaces simbólicos elegidos directamente, otros proyectos, _shared/ ni perfiles. Todo queda en un snapshot y se deshace con «skillhub undo» (una skill de proyecto requiere ejecutarlo en ese mismo proyecto y restaura tanto la carpeta como esos enlaces). Las copias con el mismo nombre en otros ámbitos o agentes no se tocan: se informan. Una actualización pendiente de la skill pasa a reemplazada."
 	DisableUse    = "disable <skill> [--dry-run] [--yes --plan <id>]"
 	DisableShort  = "Desactiva una skill en todos sus destinos gestionados"
 	DisableLong   = "Quita sus enlaces, aparca su carpeta en ~/.agents/.skillhub/disabled y aparca su entrada del lock, para que «npx skills update» no la reinstale. Un harness que tiene una copia propia la sigue viendo, y el plan lo avisa."
@@ -45,18 +45,19 @@ const (
 	FixShort      = "Repara un hallazgo de Doctor tras tu confirmación"
 	FixLong       = "Sin --repair, aplica la única reparación que admite el hallazgo; si admite varias, indica una con --repair. Adoptar copias divergentes necesita que elijas la canónica con --canonical. Reinstalar una entrada del lock sin carpeta (--repair reinstall) muestra primero la revisión de su origen en GitHub, como «skills install», y después el plan que reemplaza la entrada; --to elige sus destinos."
 
-	FlagYes       = "aprueba sin preguntar el plan cuyo identificador indica --plan"
-	FlagPlan      = "identificador (`id`) del plan que viste y apruebas; se usa con --yes"
-	FlagDryRun    = "muestra el plan sin cambiar nada; se niega, como la ejecución, si hay una operación interrumpida"
-	FlagTargets   = "`harness` de destino; se puede repetir o separar con comas (por defecto, los detectados que se proponen)"
-	FlagFrom      = "`harness` del que se quita el enlace"
-	FlagLinkTo    = "`harness` donde se crea el enlace"
-	FlagRepair    = "`tipo` de reparación que se aplica, si el hallazgo admite varias"
-	FlagCanonical = "`ruta` de la carpeta canónica; solo con la reparación adopt"
-	FlagFixTo     = "`harness` de destino de una reinstalación; se puede repetir o separar con comas (por defecto, los detectados que se proponen)"
-	UndoLong      = "Deshace una actualización aplicada: <skill> es su nombre o su id, y --to elige el snapshot. Para deshacer una operación de gestión (instalar, eliminar, activar, desactivar, enlazar, quitar un enlace o reparar), <skill> es su línea del historial, por ejemplo v2:disable, y --to su snapshot; sin --to, la última. Deshacer una operación de gestión muestra su plan y pide confirmación, o se aprueba con --yes --plan <id>."
-	FlagUndoPlan  = "identificador (`id`) del plan de deshacer que viste (operaciones de gestión, con --yes)"
-	FlagUndoYes   = "aprueba sin preguntar el deshacer cuyo identificador indica --plan (operaciones de gestión)"
+	FlagYes           = "aprueba sin preguntar el plan cuyo identificador indica --plan"
+	FlagPlan          = "identificador (`id`) del plan que viste y apruebas; se usa con --yes"
+	FlagDryRun        = "muestra el plan sin cambiar nada; se niega, como la ejecución, si hay una operación interrumpida"
+	FlagAllowProvider = "permite planificar la eliminación reversible de una skill en zona de proveedor (avisa el riesgo antes de confirmar)"
+	FlagTargets       = "`harness` de destino; se puede repetir o separar con comas (por defecto, los detectados que se proponen)"
+	FlagFrom          = "`harness` del que se quita el enlace"
+	FlagLinkTo        = "`harness` donde se crea el enlace"
+	FlagRepair        = "`tipo` de reparación que se aplica, si el hallazgo admite varias"
+	FlagCanonical     = "`ruta` de la carpeta canónica; solo con la reparación adopt"
+	FlagFixTo         = "`harness` de destino de una reinstalación; se puede repetir o separar con comas (por defecto, los detectados que se proponen)"
+	UndoLong          = "Deshace una actualización aplicada: <skill> es su nombre o su id, y --to elige el snapshot. Para deshacer una operación de gestión (instalar, eliminar, activar, desactivar, enlazar, quitar un enlace o reparar), <skill> es su línea del historial, por ejemplo v2:disable, y --to su snapshot; sin --to, la última. Deshacer una operación de gestión muestra su plan y pide confirmación, o se aprueba con --yes --plan <id>."
+	FlagUndoPlan      = "identificador (`id`) del plan de deshacer que viste (operaciones de gestión, con --yes)"
+	FlagUndoYes       = "aprueba sin preguntar el deshacer cuyo identificador indica --plan (operaciones de gestión)"
 )
 
 // Messages of the approval flow.
@@ -134,6 +135,8 @@ var stepKinds = map[string]string{
 	"lockRemoveLast": "quitar la entrada «%[5]s», la última, y borrar el lock que queda vacío",
 	"removeTree":     "borrar %[3]s (queda en el snapshot)",
 	"restoreTree":    "restaurar %[3]s desde el snapshot",
+	"removeClone":    "borrar el clon %[3]s (queda en el snapshot)",
+	"restoreClone":   "restaurar el clon %[3]s desde el snapshot",
 	"require":        "comprobar que %[3]s sigue igual (no se toca)",
 }
 
@@ -448,7 +451,27 @@ func keptCopyReason(c app.KeptCopy) string {
 	}
 }
 
+func providerLabel(provider string) string {
+	switch provider {
+	case app.ProviderClaudePlugin:
+		return "Claude Code (plugin)"
+	case app.ProviderGentleAI:
+		return "gentle-ai"
+	case app.ProviderClaudeSynced:
+		return "Claude Code (skills sincronizadas)"
+	case app.ProviderCursor:
+		return "Cursor"
+	case app.ProviderCodex:
+		return "Codex"
+	default:
+		return SafeLine(provider)
+	}
+}
+
 func writeRemove(b *strings.Builder, r *app.RemovePreview) {
+	if r.Provider != "" {
+		fmt.Fprintf(b, "Aviso de proveedor (%s): borrarla solo elimina los archivos del disco, sin actualizar el estado ni el manifiesto del proveedor, por lo que el proveedor podría volver a crearla o dejar un plugin incompleto. La operación queda en el snapshot y se puede deshacer con «skillhub undo».\n", providerLabel(r.Provider))
+	}
 	if r.Group {
 		for _, f := range r.Folders {
 			state := "activa"
@@ -475,6 +498,11 @@ func writeRemove(b *strings.Builder, r *app.RemovePreview) {
 		if r.Folder == "" {
 			// A parked record whose folder was already gone (park_entry).
 			b.WriteString("Sin carpeta: solo queda su registro desactivado.\n")
+		} else if r.Clone {
+			fmt.Fprintf(b, "Carpeta (clon completo): %s (clon %s)\n", SafeLine(r.Folder), SafeLine(short(r.TreeSHA)))
+			if len(r.CloneSkills) > 0 {
+				fmt.Fprintf(b, "Skills del clon que se eliminan juntas: %s\n", joinSafe(r.CloneSkills))
+			}
 		} else {
 			fmt.Fprintf(b, "Carpeta (%s): %s (árbol %s)\n", state, SafeLine(r.Folder), SafeLine(short(r.TreeSHA)))
 		}
@@ -483,6 +511,9 @@ func writeRemove(b *strings.Builder, r *app.RemovePreview) {
 		fmt.Fprintf(b, "Modificada localmente: %s\n", SafeLine(lookup(modified, r.Modified)))
 	}
 	writeLinks(b, "Enlaces que se quitan", r.Links)
+	if r.Project && len(r.Links) > 0 {
+		b.WriteString("También se quitan los enlaces simbólicos del proyecto que apuntan a esa carpeta para no dejar enlaces rotos; todo se restaura con «skillhub undo».\n")
+	}
 	switch {
 	case r.LockEntry != nil && r.LockEntry.DeletesLock:
 		fmt.Fprintf(b, "Entrada del lock que se quita: «%s» (era la última: se borra el lock vacío)\n", SafeLine(r.LockEntry.Name))

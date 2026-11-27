@@ -272,6 +272,10 @@ var plainActions = map[string]string{
 	string(app.ActionRepair):    "reparar",
 }
 
+func providerWarningLine(provider string) string {
+	return fmt.Sprintf("Aviso de proveedor (%s): borrarla solo elimina los archivos del disco, sin actualizar el estado ni el manifiesto del proveedor, por lo que el proveedor podría volver a crearla o dejar un plugin incompleto. La operación queda en el snapshot y se puede deshacer con «skillhub undo» (o con z aquí).", providerLabel(provider))
+}
+
 // TUIPlanSummary is the plain summary of a plan: what happens, naming the
 // agents, what is not lost, how it is undone and what to reload.
 func TUIPlanSummary(p app.Proposal, name AgentNamer) Summary {
@@ -358,6 +362,9 @@ func TUIPlanSummary(p app.Proposal, name AgentNamer) Summary {
 				}
 				s.Lines = append(s.Lines, "Se conservan sin tocar: "+strings.Join(kept, ", ")+".")
 			}
+			if p.Remove.Provider != "" {
+				s.Lines = append(s.Lines, providerWarningLine(p.Remove.Provider))
+			}
 			if len(p.Reload) > 0 {
 				s.Lines = append(s.Lines, reloadIn(p.Reload, name))
 			}
@@ -369,12 +376,24 @@ func TUIPlanSummary(p app.Proposal, name AgentNamer) Summary {
 			s.Question = fmt.Sprintf("¿Eliminar %s (%s de este proyecto)?", name, root)
 			first := fmt.Sprintf("Solo se quita la copia de este proyecto en %s; las demás skills no se tocan.", root)
 			second := fmt.Sprintf("Carpeta: %s. Se mueve a la papelera de skillhub: se deshace desde este mismo proyecto con z o en el Historial (h).", SafeLine(p.Remove.Folder))
+			if len(p.Remove.Links) > 0 {
+				links := make([]string, 0, len(p.Remove.Links))
+				for _, l := range p.Remove.Links {
+					links = append(links, SafeLine(l.Path))
+				}
+				second = fmt.Sprintf("Carpeta: %s (enlaces del proyecto que se quitan: %s). Se mueve a la papelera de skillhub: todo se restaura desde este mismo proyecto con z o en el Historial (h).",
+					SafeLine(p.Remove.Folder), strings.Join(links, ", "))
+			}
 			s.Lines = []string{first, second}
 			break
 		}
 		label := r.Key
-		if p.Remove != nil && p.Remove.Key != "" {
-			label = p.Remove.Key
+		if p.Remove != nil {
+			if p.Remove.Clone && p.Remove.SkillName != "" {
+				label = p.Remove.SkillName
+			} else if p.Remove.Key != "" {
+				label = p.Remove.Key
+			}
 		}
 		s.Question = fmt.Sprintf("¿Eliminar %s?", SafeLine(label))
 		first := gone()
@@ -393,6 +412,16 @@ func TUIPlanSummary(p app.Proposal, name AgentNamer) Summary {
 			switch {
 			case p.Remove.Folder == "" && p.Remove.Parked:
 				second = "Solo se descarta su registro desactivado (no tiene carpeta): se deshace con z enseguida, o desde el Historial (h)."
+			case p.Remove.Clone && p.Remove.Folder != "":
+				second = fmt.Sprintf("Carpeta (clon completo): %s", SafeLine(p.Remove.Folder))
+				if len(p.Remove.Links) > 0 {
+					links := make([]string, 0, len(p.Remove.Links))
+					for _, l := range p.Remove.Links {
+						links = append(links, SafeLine(l.Path))
+					}
+					second += fmt.Sprintf(" (enlaces que se quitan: %s)", strings.Join(links, ", "))
+				}
+				second += ". Se mueve a la papelera de skillhub: se deshace con z enseguida, o desde el Historial (h)."
 			case p.Remove.Folder != "" && len(p.Remove.Links) > 0:
 				links := make([]string, 0, len(p.Remove.Links))
 				for _, l := range p.Remove.Links {
@@ -406,8 +435,14 @@ func TUIPlanSummary(p app.Proposal, name AgentNamer) Summary {
 			}
 		}
 		s.Lines = []string{first, second}
+		if p.Remove != nil && p.Remove.Clone && len(p.Remove.CloneSkills) > 0 {
+			s.Lines = append(s.Lines, fmt.Sprintf("Skills del clon que se eliminan juntas: %s.", JoinNames(p.Remove.CloneSkills)))
+		}
 		if p.Remove != nil && p.Remove.Modified == "yes" {
 			s.Lines = append(s.Lines, "Tus cambios en ella también quedan en la papelera.")
+		}
+		if p.Remove != nil && p.Remove.Provider != "" {
+			s.Lines = append(s.Lines, providerWarningLine(p.Remove.Provider))
 		}
 		reload()
 	case app.ActionInstall, app.ActionReinstall:

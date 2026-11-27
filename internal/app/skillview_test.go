@@ -160,7 +160,11 @@ func TestSkillActionsAreWhatThePlannersPlan(t *testing.T) {
 			key     string
 			offered bool
 		}{{app.ActionDisable, key, acts.Disable}, {app.ActionRemove, removeKey, acts.Remove}} {
-			if ok := plans(app.Request{Action: a.action, Key: a.key}); ok != a.offered {
+			req := app.Request{Action: a.action, Key: a.key}
+			if a.action == app.ActionRemove && acts.Provider != "" {
+				req.AllowProvider = true
+			}
+			if ok := plans(req); ok != a.offered {
 				t.Errorf("%s: %s offered = %v, but planning it succeeds = %v", s.ID, a.action, a.offered, ok)
 			}
 		}

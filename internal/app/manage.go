@@ -408,15 +408,16 @@ func (m *manager) planRaw(req Request) (Proposal, error) {
 	case ActionRemove:
 		var rp remove.Plan
 		var err error
+		opts := remove.Options{AllowProvider: req.AllowProvider}
 		if req.Group {
-			rp, err = m.remove.RemoveGroup(req.Key)
+			rp, err = m.remove.RemoveGroupWithOptions(req.Key, opts)
 		} else {
-			rp, err = m.remove.Remove(req.Key)
+			rp, err = m.remove.RemoveWithOptions(req.Key, opts)
 		}
 		if err != nil {
 			return Proposal{}, err
 		}
-		return Proposal{PlanID: rp.Plan.ID, plan: rp.Plan, Remove: removeView(rp.Preview)}, nil
+		return Proposal{PlanID: rp.Plan.ID, plan: rp.Plan, Remove: removeView(rp.Preview, m.a.providerForZone(rp.Preview.ProviderZone, rp.Preview.ProviderEntry))}, nil
 	case ActionInstall:
 		return m.planInstall(req)
 	case ActionReinstall:

@@ -41,6 +41,9 @@ type Request struct {
 	// Group requests complete global removal of the grouped installation
 	// identified by Key (a scanner-observed graph Skill ID).
 	Group bool `json:"group,omitempty"`
+	// AllowProvider authorizes planning reversible removal of skills in
+	// confirmed provider zones (gentle-ai, claude-plugin, provider).
+	AllowProvider bool `json:"allow_provider,omitempty"`
 	// Harness is the harness of unlink and link.
 	Harness string `json:"harness,omitempty"`
 	// Install is the reviewed revision, its targets and the time the lock
@@ -122,8 +125,9 @@ type Proposal struct {
 }
 
 // Step is one step of a plan: Kind is move, link, unlink, lockPark,
-// lockUnpark, lockAdd, lockRemove, lockRemoveLast, lockReplace, removeTree or
-// restoreTree; the other fields are set as the kind uses them.
+// lockUnpark, lockAdd, lockRemove, lockRemoveLast, lockReplace, removeTree,
+// restoreTree, removeClone or restoreClone; the other fields are set as the
+// kind uses them.
 type Step struct {
 	Kind   string
 	Src    string
@@ -207,6 +211,11 @@ type RemovePreview struct {
 	Folders           []RemovedFolder
 	KeptCopies        []KeptCopy
 	RetainedTargets   []string
+	Clone             bool
+	CloneSkills       []string
+	// Provider is the confirmed external provider identifier when the removal
+	// touches a provider zone (e.g. gentle-ai, claude-plugin, codex).
+	Provider string
 }
 
 // RemovedFolder is one eligible global folder removed by a group removal.

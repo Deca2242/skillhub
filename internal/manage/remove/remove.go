@@ -107,6 +107,13 @@ var (
 	ErrChanged = errors.New("the skill changed while it was observed")
 )
 
+// Options configures optional removal permissions.
+type Options struct {
+	// AllowProvider allows planning reversible removal of real skill folders
+	// in confirmed provider zones (ZoneGentle, ZonePlugin, ZoneProvider).
+	AllowProvider bool
+}
+
 // Remover plans removals.
 type Remover struct {
 	d Deps
@@ -178,6 +185,16 @@ type Preview struct {
 	KeptCopies []KeptCopy
 	// RetainedTargets are harnesses that still see the skill via a retained copy.
 	RetainedTargets []string
+	// Clone marks removal of a whole Git clone folder of a confirmed provider.
+	Clone bool
+	// CloneSkills are the observed skills inside Clone that are removed together.
+	CloneSkills []string
+	// ProviderZone is the confirmed provider zone touched by the removal
+	// (ZoneGentle, ZonePlugin, or ZoneProvider), empty when none.
+	ProviderZone graph.Zone
+	// ProviderEntry is a representative entry path in ProviderZone for
+	// provider attribution.
+	ProviderEntry string
 }
 
 // Link is a symlink the removal takes out: its path, exact content and the
@@ -315,6 +332,11 @@ func validHomeRel(rel string) bool {
 // ambiguity, symlink, provider, profile and Git boundaries, and writes nothing;
 // engine.Apply runs the plan it returns.
 func (r *Remover) Remove(target string) (Plan, error) {
+	return r.RemoveWithOptions(target, Options{})
+}
+
+// RemoveWithOptions plans a skill removal with explicit options.
+func (r *Remover) RemoveWithOptions(target string, opts Options) (Plan, error) {
 	parsed, err := parseTarget(target)
 	if err != nil {
 		return Plan{}, err
@@ -329,11 +351,12 @@ func (r *Remover) Remove(target string) (Plan, error) {
 	}
 	profiles := r.profileRoots()
 	o := &observation{
-		r:         r,
-		g:         g,
-		st:        st,
-		profiles:  profiles,
-		harnesses: r.harnessRoots(profiles),
+		r:             r,
+		g:             g,
+		st:            st,
+		profiles:      profiles,
+		harnesses:     r.harnessRoots(profiles),
+		allowProvider: opts.AllowProvider,
 	}
 	switch parsed.kind {
 	case targetLegacyKey:
@@ -360,11 +383,12 @@ func validKey(key string) bool {
 
 // observation is what one Remove call saw.
 type observation struct {
-	r         *Remover
-	g         graph.Graph
-	st        domain.PersistedState
-	profiles  map[string]string // root -> profile id
-	harnesses []string          // configured non-store, non-profile, non-provider global harness roots
+	r             *Remover
+	g             graph.Graph
+	st            domain.PersistedState
+	profiles      map[string]string // root -> profile id
+	harnesses     []string          // configured non-store, non-profile, non-provider global harness roots
+	allowProvider bool
 }
 
 // profileRoots are the read roots of the diagnostic profiles.
@@ -439,6 +463,52 @@ func (o *observation) offDir() string {
 	return filepath.Join(o.r.d.Paths.StoreDir(), inventory.OffDirName)
 }
 
+func isAllowedProviderZone(z graph.Zone) bool {
+	return z == graph.ZoneGentle || z == graph.ZonePlugin || z == graph.ZoneProvider
+}
+
+func (o *observation) boundaryZone(p string) graph.Zone {
+	for _, b := range o.g.Boundary {
+		if b.Path == p || (b.Zone != graph.ZoneFile && within(p, b.Path)) {
+			return b.Zone
+		}
+	}
+	return graph.ZoneNone
+}
+
+// enclosingProviderRoot returns the top-most excluded provider root that
+// strictly encloses p (never p itself).
+func (o *observation) enclosingProviderRoot(p string) string {
+	if !inventory.Excluded(o.r.d.Paths, p) {
+		return ""
+	}
+	parent := filepath.Dir(p)
+	if !inventory.Excluded(o.r.d.Paths, parent) {
+		return ""
+	}
+	root := parent
+	for {
+		next := filepath.Dir(root)
+		if next == root || !inventory.Excluded(o.r.d.Paths, next) {
+			return root
+		}
+		root = next
+	}
+}
+
+// enclosingRoot returns the allowed global root (store, configured harness
+// directory, or, when AllowProvider is true, known provider root) that
+// strictly encloses p.
+func (o *observation) enclosingRoot(p string) string {
+	if root := o.enclosingGlobalRoot(p); root != "" {
+		return root
+	}
+	if o.allowProvider {
+		return o.enclosingProviderRoot(p)
+	}
+	return ""
+}
+
 // checkForeignBoundary rejects paths inside diagnostic profiles, provider
 // excluded folders, or any graph foreign-zone boundary.
 func (o *observation) checkForeignBoundary(entry string) error {
@@ -446,10 +516,18 @@ func (o *observation) checkForeignBoundary(entry string) error {
 		return fmt.Errorf("%w: %s is in diagnostic profile %s", ErrForeignZone, entry, id)
 	}
 	if inventory.Excluded(o.r.d.Paths, entry) {
-		return fmt.Errorf("%w: %s is in a provider directory", ErrForeignZone, entry)
+		if !o.allowProvider || o.enclosingProviderRoot(entry) == "" {
+			return fmt.Errorf("%w: %s is in a provider directory", ErrForeignZone, entry)
+		}
 	}
 	for _, b := range o.g.Boundary {
 		if b.Path == entry || (b.Zone != graph.ZoneFile && within(entry, b.Path)) {
+			if o.allowProvider && isAllowedProviderZone(b.Zone) {
+				if b.Zone == graph.ZoneProvider && o.enclosingProviderRoot(entry) == "" {
+					return fmt.Errorf("%w: %s is %s", ErrForeignZone, entry, b.Zone)
+				}
+				continue
+			}
 			return fmt.Errorf("%w: %s is %s", ErrForeignZone, entry, b.Zone)
 		}
 	}
@@ -563,7 +641,7 @@ func (o *observation) removeLock(name string) (Plan, error) {
 		return Plan{}, fmt.Errorf("%w: %s", ErrNotFound, id)
 	}
 	skill := o.g.Skills[i]
-	if skill.Zone != graph.ZoneNone {
+	if skill.Zone != graph.ZoneNone && !(o.allowProvider && isAllowedProviderZone(skill.Zone)) {
 		return Plan{}, fmt.Errorf("%w: %s is %s", ErrForeignZone, id, skill.Zone)
 	}
 	if len(skill.SharedWith) > 0 {
@@ -581,11 +659,11 @@ func (o *observation) removeLock(name string) (Plan, error) {
 	if err := o.checkForeignBoundary(f.Path); err != nil {
 		return Plan{}, err
 	}
-	root := o.enclosingGlobalRoot(entry)
+	root := o.enclosingRoot(entry)
 	if root == "" {
 		return Plan{}, fmt.Errorf("%w: %s", ErrNotFound, id)
 	}
-	physRoot := o.enclosingGlobalRoot(f.Path)
+	physRoot := o.enclosingRoot(f.Path)
 	if physRoot == "" {
 		return Plan{}, fmt.Errorf("%w: %s resolves outside global skill directories", ErrForeignZone, entry)
 	}
@@ -599,9 +677,19 @@ func (o *observation) removeLock(name string) (Plan, error) {
 	}
 	switch filepath.Dir(entry) {
 	case o.r.d.Paths.StoreDir():
-		return o.planActive(&active{key: filepath.Base(entry), path: entry, folder: f, skill: skill})
+		plan, err := o.planActive(&active{key: filepath.Base(entry), path: entry, folder: f, skill: skill})
+		if err == nil && isAllowedProviderZone(skill.Zone) {
+			plan.Preview.ProviderZone = skill.Zone
+			plan.Preview.ProviderEntry = entry
+		}
+		return plan, err
 	case o.offDir():
-		return o.planOff(entry, f, &skill)
+		plan, err := o.planOff(entry, f, &skill)
+		if err == nil && isAllowedProviderZone(skill.Zone) {
+			plan.Preview.ProviderZone = skill.Zone
+			plan.Preview.ProviderEntry = entry
+		}
+		return plan, err
 	default:
 		return Plan{}, fmt.Errorf("%w: %s", ErrNotFound, id)
 	}
@@ -615,18 +703,171 @@ func (o *observation) removeGit(rel string) (Plan, error) {
 	if err := o.checkForeignBoundary(entry); err != nil {
 		return Plan{}, err
 	}
-	root := o.enclosingGlobalRoot(entry)
+	root := o.enclosingRoot(entry)
 	if root == "" {
 		return Plan{}, fmt.Errorf("%w: git:%s", ErrNotFound, rel)
 	}
-	exists, err := o.r.d.Files.Exists(entry)
+	if !o.allowProvider {
+		exists, err := o.r.d.Files.Exists(entry)
+		if err != nil {
+			return Plan{}, fmt.Errorf("look at %s: %w", entry, err)
+		}
+		if !exists {
+			return Plan{}, fmt.Errorf("%w: git:%s", ErrNotFound, rel)
+		}
+		return Plan{}, fmt.Errorf("%w: %s is a git clone", engine.ErrUnsupportedTree, entry)
+	}
+
+	mode, err := o.r.d.Files.Mode(entry)
+	if errors.Is(err, iofs.ErrNotExist) {
+		return Plan{}, fmt.Errorf("%w: git:%s", ErrNotFound, rel)
+	}
 	if err != nil {
 		return Plan{}, fmt.Errorf("look at %s: %w", entry, err)
 	}
-	if !exists {
+	if mode&iofs.ModeSymlink != 0 {
+		return Plan{}, fmt.Errorf("%w: %s is a symlink", ErrAlias, entry)
+	}
+	if !mode.IsDir() {
 		return Plan{}, fmt.Errorf("%w: git:%s", ErrNotFound, rel)
 	}
-	return Plan{}, fmt.Errorf("%w: %s is a git clone", engine.ErrUnsupportedTree, entry)
+
+	phys, err := o.resolved(entry)
+	if err != nil {
+		return Plan{}, err
+	}
+	if err := o.checkForeignBoundary(phys); err != nil {
+		return Plan{}, err
+	}
+	physRoot := o.enclosingRoot(phys)
+	if physRoot == "" {
+		return Plan{}, fmt.Errorf("%w: %s resolves outside global skill directories", ErrForeignZone, entry)
+	}
+
+	id := domain.GitID(rel)
+	si := slices.IndexFunc(o.g.Skills, func(s graph.Skill) bool { return s.ID == id })
+	if si < 0 {
+		return Plan{}, fmt.Errorf("%w: %s", ErrNotFound, id)
+	}
+	skill := o.g.Skills[si]
+	if len(skill.SharedWith) > 0 {
+		return Plan{}, fmt.Errorf("%w: several skills claim %s", ErrAmbiguous, id)
+	}
+	if skill.Zone == graph.ZoneNone {
+		return Plan{}, fmt.Errorf("%w: %s is a git clone", engine.ErrUnsupportedTree, entry)
+	}
+	if !isAllowedProviderZone(skill.Zone) {
+		return Plan{}, fmt.Errorf("%w: %s is %s", ErrForeignZone, id, skill.Zone)
+	}
+
+	var cloneRoot string
+	for dir := phys; within(dir, physRoot) && dir != physRoot; dir = filepath.Dir(dir) {
+		gitPath := filepath.Join(dir, ".git")
+		gitMode, err := o.r.d.Files.Mode(gitPath)
+		if errors.Is(err, iofs.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return Plan{}, fmt.Errorf("look at %s: %w", gitPath, err)
+		}
+		if gitMode&iofs.ModeSymlink != 0 || !gitMode.IsDir() {
+			return Plan{}, fmt.Errorf("%w: %s has unsupported .git entry", engine.ErrUnsupportedTree, dir)
+		}
+		cloneRoot = dir
+		break
+	}
+	if cloneRoot == "" {
+		return Plan{}, fmt.Errorf("%w: %s is not inside a git clone", engine.ErrUnsupportedTree, entry)
+	}
+	if cloneRoot == o.r.d.Paths.StoreDir() || cloneRoot == o.offDir() {
+		return Plan{}, fmt.Errorf("%w: %s is not a removable clone root", ErrForeignZone, cloneRoot)
+	}
+	if err := o.checkForeignBoundary(cloneRoot); err != nil {
+		return Plan{}, err
+	}
+	cloneMode, err := o.r.d.Files.Mode(cloneRoot)
+	if errors.Is(err, iofs.ErrNotExist) {
+		return Plan{}, fmt.Errorf("%w: %s", ErrNotFound, cloneRoot)
+	}
+	if err != nil {
+		return Plan{}, fmt.Errorf("look at %s: %w", cloneRoot, err)
+	}
+	if cloneMode&iofs.ModeSymlink != 0 {
+		return Plan{}, fmt.Errorf("%w: %s is a symlink", ErrAlias, cloneRoot)
+	}
+	if !cloneMode.IsDir() {
+		return Plan{}, fmt.Errorf("%w: %s is not a directory", engine.ErrUnsupportedTree, cloneRoot)
+	}
+	physClone, err := o.resolved(cloneRoot)
+	if err != nil {
+		return Plan{}, err
+	}
+	if physClone != cloneRoot {
+		if err := o.checkForeignBoundary(physClone); err != nil {
+			return Plan{}, err
+		}
+		clonePhysRoot := o.enclosingRoot(physClone)
+		if clonePhysRoot == "" || physClone == clonePhysRoot {
+			return Plan{}, fmt.Errorf("%w: %s resolves outside global skill directories", ErrForeignZone, cloneRoot)
+		}
+	}
+
+	inClone := func(p string) bool {
+		return p != "" && (within(p, cloneRoot) || within(p, physClone))
+	}
+	var cloneSkills, targets, pending []string
+	for _, s := range o.g.Skills {
+		matches := inClone(s.Canonical) || slices.ContainsFunc(s.Folders, inClone)
+		if !matches {
+			continue
+		}
+		label := s.Name
+		if label == "" {
+			label = s.ID
+		}
+		cloneSkills = append(cloneSkills, label)
+		pending = append(pending, o.openCandidates(s.ID)...)
+		for _, sg := range s.Visibility {
+			if !o.isProfile(sg.Harness) {
+				targets = append(targets, sg.Harness)
+			}
+		}
+	}
+	slices.Sort(cloneSkills)
+	cloneSkills = slices.Compact(cloneSkills)
+	slices.Sort(targets)
+	targets = slices.Compact(targets)
+	slices.Sort(pending)
+	pending = slices.Compact(pending)
+
+	var combinedFolder graph.Folder
+	for _, f := range o.g.Folders {
+		if inClone(f.Path) {
+			combinedFolder.Sightings = append(combinedFolder.Sightings, f.Sightings...)
+		}
+	}
+
+	pv := Preview{
+		Key:               skill.ID,
+		SkillName:         skill.Name,
+		Folder:            cloneRoot,
+		Clone:             true,
+		CloneSkills:       cloneSkills,
+		Targets:           targets,
+		PendingCandidates: pending,
+		ProviderZone:      skill.Zone,
+		ProviderEntry:     entry,
+	}
+	pv.Links, pv.KeptLinks, err = o.links(func(l graph.Link) bool {
+		return l.Status == graph.LinkOK && !inClone(l.Path) && (inClone(l.Folder) || inClone(l.Final))
+	}, combinedFolder)
+	if err != nil {
+		return Plan{}, err
+	}
+	if err := o.keepZoneLinksWithin(&pv, cloneRoot, physClone); err != nil {
+		return Plan{}, err
+	}
+	return o.build(pv, engine.Effect{})
 }
 
 func (o *observation) removeDir(rel string) (Plan, error) {
@@ -637,7 +878,7 @@ func (o *observation) removeDir(rel string) (Plan, error) {
 	if err := o.checkForeignBoundary(entry); err != nil {
 		return Plan{}, err
 	}
-	root := o.enclosingGlobalRoot(entry)
+	root := o.enclosingRoot(entry)
 	if root == "" {
 		return Plan{}, fmt.Errorf("%w: dir:%s", ErrNotFound, rel)
 	}
@@ -664,7 +905,7 @@ func (o *observation) removeDir(rel string) (Plan, error) {
 	if err := o.checkForeignBoundary(phys); err != nil {
 		return Plan{}, err
 	}
-	physRoot := o.enclosingGlobalRoot(phys)
+	physRoot := o.enclosingRoot(phys)
 	if physRoot == "" {
 		return Plan{}, fmt.Errorf("%w: %s resolves outside global skill directories", ErrForeignZone, entry)
 	}
@@ -684,7 +925,8 @@ func (o *observation) removeDir(rel string) (Plan, error) {
 	isStore := parent == store
 	isOff := parent == off
 	isHarness := slices.Contains(o.harnesses, parent)
-	if !isStore && !isOff && !isHarness {
+	isProvider := o.allowProvider && o.enclosingProviderRoot(entry) != ""
+	if !isStore && !isOff && !isHarness && !isProvider {
 		return Plan{}, fmt.Errorf("%w: dir:%s", ErrNotFound, rel)
 	}
 	switch {
@@ -692,31 +934,51 @@ func (o *observation) removeDir(rel string) (Plan, error) {
 		return Plan{}, fmt.Errorf("%w: %s resolves outside the store", ErrForeignZone, entry)
 	case isOff && physParent != off:
 		return Plan{}, fmt.Errorf("%w: %s resolves outside OFF", ErrForeignZone, entry)
-	case isHarness && !slices.Contains(o.harnesses, physParent):
+	case isHarness && !slices.Contains(o.harnesses, physParent) && (!o.allowProvider || o.enclosingProviderRoot(phys) == ""):
 		return Plan{}, fmt.Errorf("%w: %s resolves outside configured harness directories", ErrForeignZone, entry)
+	case isProvider && o.enclosingProviderRoot(phys) == "":
+		return Plan{}, fmt.Errorf("%w: %s resolves outside provider directories", ErrForeignZone, entry)
 	}
 
+	var f graph.Folder
 	fi := slices.IndexFunc(o.g.Folders, func(f graph.Folder) bool { return slices.Contains(f.Entries, entry) })
-	if fi < 0 {
-		return Plan{}, fmt.Errorf("%w: dir:%s", ErrNotFound, rel)
-	}
-	f := o.g.Folders[fi]
-	if err := o.checkForeignBoundary(f.Path); err != nil {
-		return Plan{}, err
-	}
-	fRoot := o.enclosingGlobalRoot(f.Path)
-	if fRoot == "" {
-		return Plan{}, fmt.Errorf("%w: %s resolves outside global skill directories", ErrForeignZone, entry)
-	}
-	if f.Path != entry && f.Path != phys {
-		if err := o.checkGitBoundary(f.Path, fRoot); err != nil {
+	if fi >= 0 {
+		f = o.g.Folders[fi]
+		if err := o.checkForeignBoundary(f.Path); err != nil {
 			return Plan{}, err
+		}
+		fRoot := o.enclosingRoot(f.Path)
+		if fRoot == "" {
+			return Plan{}, fmt.Errorf("%w: %s resolves outside global skill directories", ErrForeignZone, entry)
+		}
+		if f.Path != entry && f.Path != phys {
+			if err := o.checkGitBoundary(f.Path, fRoot); err != nil {
+				return Plan{}, err
+			}
+		}
+	} else {
+		if !o.allowProvider {
+			return Plan{}, fmt.Errorf("%w: dir:%s", ErrNotFound, rel)
+		}
+		if !isAllowedProviderZone(o.boundaryZone(entry)) && o.enclosingProviderRoot(entry) == "" {
+			return Plan{}, fmt.Errorf("%w: dir:%s", ErrNotFound, rel)
+		}
+		tree, err := o.r.d.HashDir(phys)
+		if err != nil {
+			return Plan{}, fmt.Errorf("hash %s: %w", phys, err)
+		}
+		f = graph.Folder{
+			Path:    phys,
+			Entry:   entry,
+			Entries: []string{entry},
+			Name:    filepath.Base(entry),
+			TreeSHA: tree.SHA,
 		}
 	}
 
 	for _, s := range o.g.Skills {
 		claims := s.Canonical == f.Path || slices.Contains(s.Folders, f.Path)
-		if claims && s.Zone != graph.ZoneNone && s.Zone != graph.ZoneProfile {
+		if claims && s.Zone != graph.ZoneNone && s.Zone != graph.ZoneProfile && !(o.allowProvider && isAllowedProviderZone(s.Zone)) {
 			return Plan{}, fmt.Errorf("%w: %s is %s", ErrForeignZone, entry, s.Zone)
 		}
 	}
@@ -728,30 +990,48 @@ func (o *observation) removeDir(rel string) (Plan, error) {
 		}
 	}
 
+	providerZone, providerEntry := o.providerInfo(entry, phys, owners)
+
 	switch {
 	case isStore:
 		switch {
 		case len(owners) == 0:
+			if o.allowProvider && isAllowedProviderZone(providerZone) {
+				return o.planHarnessWithProvider(entry, f, providerZone, providerEntry)
+			}
 			return Plan{}, fmt.Errorf("%w: no skill owns %s", ErrNotFound, entry)
 		case len(owners) > 1 || len(owners[0].SharedWith) > 0:
 			return Plan{}, fmt.Errorf("%w: several skills claim %s", ErrAmbiguous, entry)
-		case owners[0].Zone != graph.ZoneNone:
+		case owners[0].Zone != graph.ZoneNone && !(o.allowProvider && isAllowedProviderZone(owners[0].Zone)):
 			return Plan{}, fmt.Errorf("%w: %s is %s", ErrForeignZone, entry, owners[0].Zone)
 		}
-		return o.planActive(&active{key: filepath.Base(entry), path: entry, folder: f, skill: owners[0]})
+		plan, err := o.planActive(&active{key: filepath.Base(entry), path: entry, folder: f, skill: owners[0]})
+		if err == nil && isAllowedProviderZone(providerZone) {
+			plan.Preview.ProviderZone = providerZone
+			plan.Preview.ProviderEntry = providerEntry
+		}
+		return plan, err
 	case isOff:
 		switch {
 		case len(owners) > 1 || (len(owners) == 1 && len(owners[0].SharedWith) > 0):
 			return Plan{}, fmt.Errorf("%w: several skills claim %s", ErrAmbiguous, entry)
-		case len(owners) == 1 && owners[0].Zone != graph.ZoneNone:
+		case len(owners) == 1 && owners[0].Zone != graph.ZoneNone && !(o.allowProvider && isAllowedProviderZone(owners[0].Zone)):
 			return Plan{}, fmt.Errorf("%w: %s is %s", ErrForeignZone, entry, owners[0].Zone)
 		}
 		var owner *graph.Skill
 		if len(owners) == 1 {
 			owner = &owners[0]
 		}
-		return o.planOff(entry, f, owner)
+		plan, err := o.planOff(entry, f, owner)
+		if err == nil && isAllowedProviderZone(providerZone) {
+			plan.Preview.ProviderZone = providerZone
+			plan.Preview.ProviderEntry = providerEntry
+		}
+		return plan, err
 	default:
+		if len(owners) > 1 || (len(owners) == 1 && len(owners[0].SharedWith) > 0) {
+			return Plan{}, fmt.Errorf("%w: several skills claim %s", ErrAmbiguous, entry)
+		}
 		if len(owners) > 0 {
 			for _, s := range owners {
 				if s.Origin == domain.OriginGitClone {
@@ -762,7 +1042,7 @@ func (o *observation) removeDir(rel string) (Plan, error) {
 				}
 			}
 		}
-		return o.planHarness(entry, f)
+		return o.planHarnessWithProvider(entry, f, providerZone, providerEntry)
 	}
 }
 
@@ -887,12 +1167,35 @@ func (o *observation) planOff(entry string, f graph.Folder, owner *graph.Skill) 
 	return o.build(pv, engine.Effect{})
 }
 
+func (o *observation) providerInfo(entry, phys string, owners []graph.Skill) (graph.Zone, string) {
+	if len(owners) > 0 && isAllowedProviderZone(owners[0].Zone) {
+		return owners[0].Zone, entry
+	}
+	if bz := o.boundaryZone(entry); isAllowedProviderZone(bz) {
+		return bz, entry
+	}
+	if bz := o.boundaryZone(phys); isAllowedProviderZone(bz) {
+		return bz, phys
+	}
+	if o.enclosingProviderRoot(entry) != "" {
+		return graph.ZoneProvider, entry
+	}
+	if o.enclosingProviderRoot(phys) != "" {
+		return graph.ZoneProvider, phys
+	}
+	return graph.ZoneNone, ""
+}
+
 // planHarness removes an independent non-Git folder directly inside a
 // configured global harness directory and only safely owned links resolving to
 // it, with no state, lock or candidate effects.
 func (o *observation) planHarness(entry string, f graph.Folder) (Plan, error) {
+	return o.planHarnessWithProvider(entry, f, graph.ZoneNone, "")
+}
+
+func (o *observation) planHarnessWithProvider(entry string, f graph.Folder, providerZone graph.Zone, providerEntry string) (Plan, error) {
 	base := filepath.Base(entry)
-	pv := Preview{Key: base, Folder: entry, TreeSHA: f.TreeSHA}
+	pv := Preview{Key: base, Folder: entry, TreeSHA: f.TreeSHA, ProviderZone: providerZone, ProviderEntry: providerEntry}
 	var err error
 	pv.Links, pv.KeptLinks, err = o.links(func(l graph.Link) bool { return l.Status == graph.LinkOK && l.Folder == f.Path }, f)
 	if err != nil {
@@ -1013,8 +1316,14 @@ func (o *observation) build(pv Preview, eff engine.Effect) (Plan, error) {
 		}
 	}
 	if pv.Folder != "" {
-		if err := b.RemoveTree(pv.Folder); err != nil {
-			return Plan{}, err
+		if pv.Clone {
+			if err := b.RemoveClone(pv.Folder); err != nil {
+				return Plan{}, err
+			}
+		} else {
+			if err := b.RemoveTree(pv.Folder); err != nil {
+				return Plan{}, err
+			}
 		}
 	}
 	if e := pv.LockEntry; e != nil {
@@ -1034,6 +1343,14 @@ func (o *observation) build(pv Preview, eff engine.Effect) (Plan, error) {
 	plan, err := b.Build()
 	if err != nil {
 		return Plan{}, err
+	}
+	if pv.Clone && pv.TreeSHA == "" {
+		for _, s := range plan.Steps {
+			if s.Kind == engine.StepRemoveClone && len(s.Pre) > 0 {
+				pv.TreeSHA = s.Pre[0].CloneSHA
+				break
+			}
+		}
 	}
 	return Plan{Plan: plan, Preview: pv}, nil
 }
@@ -1082,7 +1399,7 @@ func (o *observation) linkInGitRepo(linkPath string) (bool, error) {
 }
 
 func (o *observation) dirInGitRepo(dir string) (bool, error) {
-	stop := o.enclosingGlobalRoot(dir)
+	stop := o.enclosingRoot(dir)
 	if stop == "" && (dir == o.r.d.Paths.StoreDir() || slices.Contains(o.harnesses, dir)) {
 		stop = dir
 	}
@@ -1119,6 +1436,21 @@ const maxZoneDepth = 16
 // graph never enters those zones and skillhub never touches them, so the
 // removal leaves these links broken and the preview says so.
 func (o *observation) keepZoneLinks(pv *Preview, resolved string) error {
+	return o.keepZoneLinksMatch(pv, func(e ports.DirEntry) bool {
+		return e.ResolvedPath == resolved
+	})
+}
+
+func (o *observation) keepZoneLinksWithin(pv *Preview, cloneRoot, physClone string) error {
+	return o.keepZoneLinksMatch(pv, func(e ports.DirEntry) bool {
+		if within(e.Path, cloneRoot) || within(e.Path, physClone) {
+			return false
+		}
+		return within(e.ResolvedPath, cloneRoot) || within(e.ResolvedPath, physClone)
+	})
+}
+
+func (o *observation) keepZoneLinksMatch(pv *Preview, match func(ports.DirEntry) bool) error {
 	for _, b := range o.g.Boundary {
 		entries, err := o.scan(filepath.Dir(b.Path))
 		if err != nil {
@@ -1128,7 +1460,7 @@ func (o *observation) keepZoneLinks(pv *Preview, resolved string) error {
 		if i < 0 {
 			continue
 		}
-		if err := o.zoneWalk(pv, entries[i], b.Zone, resolved, 0); err != nil {
+		if err := o.zoneWalk(pv, entries[i], b.Zone, match, 0); err != nil {
 			return err
 		}
 	}
@@ -1136,10 +1468,10 @@ func (o *observation) keepZoneLinks(pv *Preview, resolved string) error {
 	return nil
 }
 
-func (o *observation) zoneWalk(pv *Preview, e ports.DirEntry, zone graph.Zone, resolved string, depth int) error {
+func (o *observation) zoneWalk(pv *Preview, e ports.DirEntry, zone graph.Zone, match func(ports.DirEntry) bool, depth int) error {
 	switch e.Kind {
 	case ports.EntrySymlink:
-		if e.ResolvedPath != resolved {
+		if !match(e) {
 			return nil
 		}
 		text, err := o.r.d.Links.Readlink(e.Path)
@@ -1156,7 +1488,7 @@ func (o *observation) zoneWalk(pv *Preview, e ports.DirEntry, zone graph.Zone, r
 			return err
 		}
 		for _, c := range children {
-			if err := o.zoneWalk(pv, c, zone, resolved, depth+1); err != nil {
+			if err := o.zoneWalk(pv, c, zone, match, depth+1); err != nil {
 				return err
 			}
 		}

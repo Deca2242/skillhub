@@ -37,6 +37,11 @@ type KeptCopy struct {
 // protected/unproven copies, independent same-name homonyms, projects and
 // providers.
 func (r *Remover) RemoveGroup(skillID string) (Plan, error) {
+	return r.RemoveGroupWithOptions(skillID, Options{})
+}
+
+// RemoveGroupWithOptions plans a grouped removal with explicit options.
+func (r *Remover) RemoveGroupWithOptions(skillID string, opts Options) (Plan, error) {
 	if skillID == "" {
 		return Plan{}, fmt.Errorf("%w: empty skill id", ErrInvalidKey)
 	}
@@ -50,11 +55,12 @@ func (r *Remover) RemoveGroup(skillID string) (Plan, error) {
 	}
 	profiles := r.profileRoots()
 	o := &observation{
-		r:         r,
-		g:         g,
-		st:        st,
-		profiles:  profiles,
-		harnesses: r.harnessRoots(profiles),
+		r:             r,
+		g:             g,
+		st:            st,
+		profiles:      profiles,
+		harnesses:     r.harnessRoots(profiles),
+		allowProvider: opts.AllowProvider,
 	}
 	return o.removeGroup(skillID)
 }
@@ -175,6 +181,16 @@ func (o *observation) removeGroup(skillID string) (Plan, error) {
 		SkillID:    skillID,
 		KeptCopies: keptCopies,
 		Modified:   Modification{State: ModifiedUnknown, Actual: eligible[0].TreeSHA},
+	}
+	if o.allowProvider {
+		for _, f := range eligible {
+			pz, pe := o.providerInfo(f.Entry, f.Path, []graph.Skill{skill})
+			if isAllowedProviderZone(pz) {
+				pv.ProviderZone = pz
+				pv.ProviderEntry = pe
+				break
+			}
+		}
 	}
 
 	var eff engine.Effect
@@ -348,11 +364,11 @@ func (o *observation) checkGroupFolderEligibility(skill graph.Skill, f graph.Fol
 	if err := o.checkForeignBoundary(f.Path); err != nil {
 		return "foreign_zone", err
 	}
-	if skill.Zone != graph.ZoneNone && skill.Zone != graph.ZoneProfile {
+	if skill.Zone != graph.ZoneNone && skill.Zone != graph.ZoneProfile && !(o.allowProvider && isAllowedProviderZone(skill.Zone)) {
 		return "foreign_zone", fmt.Errorf("%w: %s is %s", ErrForeignZone, entry, skill.Zone)
 	}
 
-	root := o.enclosingGlobalRoot(entry)
+	root := o.enclosingRoot(entry)
 	if root == "" {
 		return "outside_global_root", fmt.Errorf("%w: %s", ErrNotFound, entry)
 	}
@@ -380,11 +396,11 @@ func (o *observation) checkGroupFolderEligibility(skill graph.Skill, f graph.Fol
 	if err := o.checkForeignBoundary(phys); err != nil {
 		return "foreign_zone", err
 	}
-	physRoot := o.enclosingGlobalRoot(phys)
+	physRoot := o.enclosingRoot(phys)
 	if physRoot == "" {
 		return "outside_global_root", fmt.Errorf("%w: %s resolves outside global skill directories", ErrForeignZone, entry)
 	}
-	fRoot := o.enclosingGlobalRoot(f.Path)
+	fRoot := o.enclosingRoot(f.Path)
 	if fRoot == "" {
 		return "outside_global_root", fmt.Errorf("%w: %s resolves outside global skill directories", ErrForeignZone, entry)
 	}
@@ -413,7 +429,8 @@ func (o *observation) checkGroupFolderEligibility(skill graph.Skill, f graph.Fol
 	isStore := parent == store
 	isOff := parent == off
 	isHarness := slices.Contains(o.harnesses, parent)
-	if !isStore && !isOff && !isHarness {
+	isProvider := o.allowProvider && o.enclosingProviderRoot(entry) != ""
+	if !isStore && !isOff && !isHarness && !isProvider {
 		return "outside_global_root", fmt.Errorf("%w: %s", ErrNotFound, entry)
 	}
 	switch {
@@ -421,8 +438,10 @@ func (o *observation) checkGroupFolderEligibility(skill graph.Skill, f graph.Fol
 		return "outside_global_root", fmt.Errorf("%w: %s resolves outside the store", ErrForeignZone, entry)
 	case isOff && physParent != off:
 		return "outside_global_root", fmt.Errorf("%w: %s resolves outside OFF", ErrForeignZone, entry)
-	case isHarness && !slices.Contains(o.harnesses, physParent):
+	case isHarness && !slices.Contains(o.harnesses, physParent) && (!o.allowProvider || o.enclosingProviderRoot(phys) == ""):
 		return "outside_global_root", fmt.Errorf("%w: %s resolves outside configured harness directories", ErrForeignZone, entry)
+	case isProvider && o.enclosingProviderRoot(phys) == "":
+		return "outside_global_root", fmt.Errorf("%w: %s resolves outside provider directories", ErrForeignZone, entry)
 	}
 
 	if isStore {
@@ -437,7 +456,7 @@ func (o *observation) checkGroupFolderEligibility(skill graph.Skill, f graph.Fol
 		if !claims {
 			continue
 		}
-		if other.Zone != graph.ZoneNone && other.Zone != graph.ZoneProfile {
+		if other.Zone != graph.ZoneNone && other.Zone != graph.ZoneProfile && !(o.allowProvider && isAllowedProviderZone(other.Zone)) {
 			return "foreign_zone", fmt.Errorf("%w: %s is %s", ErrForeignZone, entry, other.Zone)
 		}
 		if other.ID != skill.ID {
