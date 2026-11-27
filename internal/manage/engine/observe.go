@@ -73,23 +73,37 @@ func (v *view) projectPath(p string) (Image, error) {
 	if err != nil {
 		return Image{}, fmt.Errorf("%w: %w", ErrInvalidStep, err)
 	}
-	if p != wantPath {
-		return Image{}, fmt.Errorf("%w: project step targets %q, expected %q", ErrInvalidStep, p, wantPath)
-	}
 	if v.e == nil || v.e.d.ProjectFS == nil {
 		return Image{}, fmt.Errorf("%w: observe %s", ErrProjectScopeUnsupported, p)
 	}
-	exists, foreign, tree, err := v.e.d.ProjectFS.ObserveSkill(v.project.ProjectDir, string(v.project.Root), v.project.SkillName)
+	if p == wantPath {
+		exists, foreign, tree, err := v.e.d.ProjectFS.ObserveSkill(v.project.ProjectDir, string(v.project.Root), v.project.SkillName)
+		if err != nil {
+			return Image{}, fmt.Errorf("%w: %w", ErrUnsupportedTree, err)
+		}
+		if !exists {
+			return Image{Path: p, State: StateAbsent}, nil
+		}
+		if foreign {
+			return Image{Path: p, State: StateOther}, nil
+		}
+		return Image{Path: p, State: StateTree, TreeSHA: tree.SHA}, nil
+	}
+	root, name, ok := parseProjectSlot(v.project.ProjectDir, p)
+	if !ok {
+		return Image{}, fmt.Errorf("%w: project step targets %q, outside %q", ErrInvalidStep, p, v.project.ProjectDir)
+	}
+	exists, isLink, target, err := v.e.d.ProjectFS.ObserveLink(v.project.ProjectDir, string(root), name)
 	if err != nil {
 		return Image{}, fmt.Errorf("%w: %w", ErrUnsupportedTree, err)
 	}
 	if !exists {
 		return Image{Path: p, State: StateAbsent}, nil
 	}
-	if foreign {
-		return Image{Path: p, State: StateOther}, nil
+	if isLink {
+		return Image{Path: p, State: StateLink, Target: target}, nil
 	}
-	return Image{Path: p, State: StateTree, TreeSHA: tree.SHA}, nil
+	return Image{Path: p, State: StateOther}, nil
 }
 
 // hashTree hashes a real folder the snapshot can keep exactly. A folder

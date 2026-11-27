@@ -105,13 +105,16 @@ type Dirs interface {
 }
 
 // ProjectFS inspects, copies, removes to trash, and restores from staging an
-// exact project-scoped skill directory without following symlinks.
+// exact project-scoped skill directory or direct symlink without following symlinks.
 type ProjectFS interface {
 	ObserveSkill(projectDir, root, name string) (exists bool, foreign bool, tree treehash.Tree, err error)
+	ObserveLink(projectDir, root, name string) (exists bool, isLink bool, target string, err error)
 	SameDevice(projectDir, root, otherDir string) (bool, error)
 	CopySkill(projectDir, root, name, dstDir string) (treehash.Tree, error)
 	RemoveSkillToTrash(projectDir, root, name, trashDest string) error
 	RestoreSkillFromStaging(stagingSrc, projectDir, root, name string) error
+	RemoveLink(projectDir, root, name, expectedTarget string) error
+	CreateLink(projectDir, root, name, target string) error
 }
 
 // Clock tells the time.

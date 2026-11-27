@@ -73,15 +73,8 @@ func (b *Builder) addStep(s Step, accept func(cur []Image) error) error {
 		return err
 	}
 	if b.meta.Project != nil {
-		wantKind := StepRemoveTree
-		if b.undoes != "" {
-			wantKind = StepRestoreTree
-		}
-		if s.Kind != wantKind {
-			return fmt.Errorf("%w: project-scoped builder expects %s, got %s", ErrInvalidStep, wantKind, s.Kind)
-		}
-		if len(b.steps) > 0 {
-			return fmt.Errorf("%w: project-scoped plan must have 1 step", ErrInvalidStep)
+		if err := b.validateProjectStep(s); err != nil {
+			return err
 		}
 	}
 	allowClone := stepAllowsClone(s)
@@ -101,6 +94,65 @@ func (b *Builder) addStep(s Step, accept func(cur []Image) error) error {
 		b.state[s.Post[i].object()] = s.Post[i]
 	}
 	b.steps = append(b.steps, s)
+	return nil
+}
+
+func (b *Builder) validateProjectStep(s Step) error {
+	wantPath, err := b.meta.Project.SkillPath()
+	if err != nil {
+		return fmt.Errorf("%w: %w", ErrInvalidStep, err)
+	}
+	if b.undoes == "" {
+		if len(b.steps) > 0 && b.steps[len(b.steps)-1].Kind == StepRemoveTree {
+			return fmt.Errorf("%w: project-scoped builder cannot add steps after %s", ErrInvalidStep, StepRemoveTree)
+		}
+		switch s.Kind {
+		case StepUnlink:
+			if s.Path == wantPath {
+				return fmt.Errorf("%w: project-scoped unlink path %q cannot equal skill path", ErrInvalidStep, s.Path)
+			}
+			if _, _, ok := parseProjectSlot(b.meta.Project.ProjectDir, s.Path); !ok {
+				return fmt.Errorf("%w: project-scoped unlink path %q is outside approved project roots", ErrInvalidStep, s.Path)
+			}
+			for _, prev := range b.steps {
+				if prev.Path == s.Path {
+					return fmt.Errorf("%w: duplicate project-scoped unlink path %q", ErrInvalidStep, s.Path)
+				}
+			}
+			return nil
+		case StepRemoveTree:
+			if s.Path != wantPath {
+				return fmt.Errorf("%w: project-scoped step path %q does not match %q", ErrInvalidStep, s.Path, wantPath)
+			}
+			return nil
+		default:
+			return fmt.Errorf("%w: project-scoped builder expects %s or %s, got %s", ErrInvalidStep, StepUnlink, StepRemoveTree, s.Kind)
+		}
+	}
+
+	if len(b.steps) == 0 {
+		if s.Kind != StepRestoreTree {
+			return fmt.Errorf("%w: project-scoped undo builder expects %s first, got %s", ErrInvalidStep, StepRestoreTree, s.Kind)
+		}
+		if s.Path != wantPath {
+			return fmt.Errorf("%w: project-scoped step path %q does not match %q", ErrInvalidStep, s.Path, wantPath)
+		}
+		return nil
+	}
+	if s.Kind != StepLink {
+		return fmt.Errorf("%w: project-scoped undo builder expects %s, got %s", ErrInvalidStep, StepLink, s.Kind)
+	}
+	if s.Path == wantPath {
+		return fmt.Errorf("%w: project-scoped link path %q cannot equal skill path", ErrInvalidStep, s.Path)
+	}
+	if _, _, ok := parseProjectSlot(b.meta.Project.ProjectDir, s.Path); !ok {
+		return fmt.Errorf("%w: project-scoped link path %q is outside approved project roots", ErrInvalidStep, s.Path)
+	}
+	for _, prev := range b.steps[1:] {
+		if prev.Path == s.Path {
+			return fmt.Errorf("%w: duplicate project-scoped link path %q", ErrInvalidStep, s.Path)
+		}
+	}
 	return nil
 }
 

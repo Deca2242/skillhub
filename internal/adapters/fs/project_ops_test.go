@@ -236,3 +236,116 @@ func TestProjectOpsRejectsLinksGitSpecialBitsForeignAndGuards(t *testing.T) {
 		t.Fatalf("FDs leaked:\nbefore: %v\nafter:  %v", beforeFDs, afterFDs)
 	}
 }
+
+func TestProjectOpsFindObserveRemoveAndCreateLinks(t *testing.T) {
+	base := t.TempDir()
+	forbidden := filepath.Join(base, "forbidden")
+	mustWriteFileMode(t, filepath.Join(forbidden, "ext-skill", "SKILL.md"), "ext\n", 0o644)
+	prefixes := filepath.SplitList(testsupport.NewHome(t).Env().ForbidPrefix)
+	if len(prefixes) == 0 {
+		t.Fatal("missing forbidden prefix")
+	}
+	guard := paths.NewGuard(forbidden + string(os.PathListSeparator) + prefixes[0])
+	ops := fsadapter.NewProjectOps(guard)
+	beforeFDs := openFDs(t)
+
+	proj := filepath.Join(base, "proj")
+	claudeSkill := filepath.Join(proj, ".claude", "skills", "golang-code-style")
+	otherSkill := filepath.Join(proj, ".claude", "skills", "other-skill")
+	mustWriteFileMode(t, filepath.Join(claudeSkill, "SKILL.md"), "---\nname: golang-code-style\n---\n", 0o644)
+	mustWriteFileMode(t, filepath.Join(otherSkill, "SKILL.md"), "---\nname: other-skill\n---\n", 0o644)
+	mustMkdirAll(t, filepath.Join(proj, ".agents", "skills"))
+
+	// Homonym real directory in .agents/skills must not be reported as a link.
+	mustWriteFileMode(t, filepath.Join(proj, ".agents", "skills", "homonym", "SKILL.md"), "real\n", 0o644)
+
+	// Links that MUST be found (in deterministic order: .agents/skills sorted, then .claude/skills sorted):
+	const relTarget = "../../.claude/skills/golang-code-style"
+	mustSymlink(t, relTarget, filepath.Join(proj, ".agents", "skills", "golang-code-style"))
+	mustSymlink(t, relTarget, filepath.Join(proj, ".agents", "skills", "alias-style"))
+	mustSymlink(t, "golang-code-style", filepath.Join(proj, ".claude", "skills", "same-root-alias"))
+
+	// Links that MUST NOT be found:
+	mustSymlink(t, "../../.claude/skills/other-skill", filepath.Join(proj, ".agents", "skills", "to-other"))
+	mustSymlink(t, filepath.Join(forbidden, "ext-skill"), filepath.Join(proj, ".agents", "skills", "to-forbidden"))
+	mustSymlink(t, "../../.agents/skills/golang-code-style", filepath.Join(proj, ".claude", "skills", "hop-to-link"))
+
+	type foundLink struct {
+		root   string
+		name   string
+		path   string
+		target string
+	}
+	var got []foundLink
+	err := ops.FindLinksToSkill(proj, string(fsadapter.ProjectRootClaude), "golang-code-style", func(root, name, linkPath, target string) {
+		got = append(got, foundLink{root: root, name: name, path: linkPath, target: target})
+	})
+	mustNoErr(t, "FindLinksToSkill", err)
+
+	want := []foundLink{
+		{root: ".agents/skills", name: "alias-style", path: filepath.Join(proj, ".agents", "skills", "alias-style"), target: relTarget},
+		{root: ".agents/skills", name: "golang-code-style", path: filepath.Join(proj, ".agents", "skills", "golang-code-style"), target: relTarget},
+		{root: ".claude/skills", name: "same-root-alias", path: filepath.Join(proj, ".claude", "skills", "same-root-alias"), target: "golang-code-style"},
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("FindLinksToSkill:\n got: %+v\nwant: %+v", got, want)
+	}
+
+	// Symlinked root must be skipped safely without following it.
+	linkedRootProj := filepath.Join(base, "linked-root-proj")
+	mustWriteFileMode(t, filepath.Join(linkedRootProj, ".claude", "skills", "alpha", "SKILL.md"), "a\n", 0o644)
+	mustMkdirAll(t, filepath.Join(linkedRootProj, ".agents"))
+	mustSymlink(t, filepath.Join(linkedRootProj, ".claude", "skills"), filepath.Join(linkedRootProj, ".agents", "skills"))
+	var linkedRootGot []foundLink
+	mustNoErr(t, "FindLinksToSkill(linked root)", ops.FindLinksToSkill(linkedRootProj, string(fsadapter.ProjectRootClaude), "alpha", func(root, name, linkPath, target string) {
+		linkedRootGot = append(linkedRootGot, foundLink{root: root, name: name, path: linkPath, target: target})
+	}))
+	if len(linkedRootGot) != 0 {
+		t.Fatalf("FindLinksToSkill(linked root) = %+v, want empty", linkedRootGot)
+	}
+
+	// ObserveLink checks.
+	exists, isLink, target, err := ops.ObserveLink(proj, string(fsadapter.ProjectRootAgents), "golang-code-style")
+	mustNoErr(t, "ObserveLink(link)", err)
+	if !exists || !isLink || target != relTarget {
+		t.Fatalf("ObserveLink(link) = (%v, %v, %q), want (true, true, %q)", exists, isLink, target, relTarget)
+	}
+	exists, isLink, target, err = ops.ObserveLink(proj, string(fsadapter.ProjectRootAgents), "homonym")
+	mustNoErr(t, "ObserveLink(real dir)", err)
+	if !exists || isLink || target != "" {
+		t.Fatalf("ObserveLink(real dir) = (%v, %v, %q), want (true, false, \"\")", exists, isLink, target)
+	}
+	exists, isLink, target, err = ops.ObserveLink(proj, string(fsadapter.ProjectRootAgents), "missing")
+	mustNoErr(t, "ObserveLink(missing)", err)
+	if exists || isLink || target != "" {
+		t.Fatalf("ObserveLink(missing) = (%v, %v, %q), want (false, false, \"\")", exists, isLink, target)
+	}
+
+	// RemoveLink refuses wrong target and non-link, then removes matching link.
+	if err := ops.RemoveLink(proj, string(fsadapter.ProjectRootAgents), "golang-code-style", "wrong-target"); err == nil {
+		t.Fatal("RemoveLink(wrong target) succeeded, want error")
+	}
+	if err := ops.RemoveLink(proj, string(fsadapter.ProjectRootAgents), "homonym", relTarget); err == nil {
+		t.Fatal("RemoveLink(real dir) succeeded, want error")
+	}
+	mustNoErr(t, "RemoveLink(exact)", ops.RemoveLink(proj, string(fsadapter.ProjectRootAgents), "golang-code-style", relTarget))
+	if _, err := os.Lstat(filepath.Join(proj, ".agents", "skills", "golang-code-style")); !errors.Is(err, iofs.ErrNotExist) {
+		t.Fatalf("link still exists after RemoveLink: %v", err)
+	}
+
+	// CreateLink refuses existing entry, and recreates missing root safely.
+	if err := ops.CreateLink(proj, string(fsadapter.ProjectRootAgents), "homonym", relTarget); !errors.Is(err, iofs.ErrExist) {
+		t.Fatalf("CreateLink(existing) = %v, want ErrExist", err)
+	}
+	mustNoErr(t, "remove .agents", os.RemoveAll(filepath.Join(proj, ".agents")))
+	mustNoErr(t, "CreateLink(recreate root)", ops.CreateLink(proj, string(fsadapter.ProjectRootAgents), "golang-code-style", relTarget))
+	raw, err := os.Readlink(filepath.Join(proj, ".agents", "skills", "golang-code-style"))
+	mustNoErr(t, "Readlink after CreateLink", err)
+	if raw != relTarget {
+		t.Fatalf("Readlink = %q, want %q", raw, relTarget)
+	}
+
+	if afterFDs := openFDs(t); !slices.Equal(beforeFDs, afterFDs) {
+		t.Fatalf("FDs leaked:\nbefore: %v\nafter:  %v", beforeFDs, afterFDs)
+	}
+}

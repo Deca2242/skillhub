@@ -1150,3 +1150,228 @@ func TestProjectScopedEngineApplyUndoRecoverAndGuards(t *testing.T) {
 	must(t, os.Remove(filepath.Join(skillDir, "foreign.txt")))
 	must(t, os.Remove(engine.RecordFile(e.p)))
 }
+
+func TestProjectScopedLinksValidationLifecycleAndRollback(t *testing.T) {
+	projDir := filepath.Join(t.TempDir(), "project")
+	snapDir := filepath.Join(t.TempDir(), "snapshots", "op-prev")
+	const treeSHA = "1111111111111111111111111111111111111111"
+	const relTarget = "../../.claude/skills/alpha"
+	skillPath := filepath.Join(projDir, ".claude", "skills", "alpha")
+	linkPath := filepath.Join(projDir, ".agents", "skills", "alpha")
+
+	t.Run("ValidateProjectScope accepts valid unlink+remove and restore+link plans", func(t *testing.T) {
+		remPlan := engine.Plan{
+			Meta: engine.Meta{
+				Action:  "remove",
+				Targets: []string{},
+				Project: &engine.ProjectScope{ProjectDir: projDir, Root: engine.ProjectRootClaude, SkillName: "alpha"},
+			},
+			Steps: []engine.Step{
+				{
+					Kind:   engine.StepUnlink,
+					Path:   linkPath,
+					Target: relTarget,
+					Pre:    []engine.Image{{Path: linkPath, State: engine.StateLink, Target: relTarget}},
+					Post:   []engine.Image{{Path: linkPath, State: engine.StateAbsent}},
+				},
+				{
+					Kind: engine.StepRemoveTree,
+					Path: skillPath,
+					Pre:  []engine.Image{{Path: skillPath, State: engine.StateTree, TreeSHA: treeSHA}},
+					Post: []engine.Image{{Path: skillPath, State: engine.StateAbsent}},
+				},
+			},
+		}
+		remPlan = reID(t, remPlan)
+		if err := remPlan.ValidateProjectScope(); err != nil {
+			t.Fatalf("ValidateProjectScope(remove with unlink) = %v, want nil", err)
+		}
+
+		undoPlan := engine.Plan{
+			Meta: engine.Meta{
+				Action:  "undo",
+				Targets: []string{},
+				Project: &engine.ProjectScope{ProjectDir: projDir, Root: engine.ProjectRootClaude, SkillName: "alpha"},
+			},
+			Undoes: "op-prev",
+			Steps: []engine.Step{
+				{
+					Kind: engine.StepRestoreTree,
+					Path: skillPath,
+					Src:  filepath.Join(snapDir, "trees", "0"),
+					Pre:  []engine.Image{{Path: skillPath, State: engine.StateAbsent}},
+					Post: []engine.Image{{Path: skillPath, State: engine.StateTree, TreeSHA: treeSHA}},
+				},
+				{
+					Kind:   engine.StepLink,
+					Path:   linkPath,
+					Target: relTarget,
+					Pre:    []engine.Image{{Path: linkPath, State: engine.StateAbsent}},
+					Post:   []engine.Image{{Path: linkPath, State: engine.StateLink, Target: relTarget}},
+				},
+			},
+		}
+		undoPlan = reID(t, undoPlan)
+		if err := undoPlan.ValidateProjectScope(); err != nil {
+			t.Fatalf("ValidateProjectScope(undo with link) = %v, want nil", err)
+		}
+	})
+
+	t.Run("ValidateProjectScope rejects invalid link steps", func(t *testing.T) {
+		cases := []struct {
+			name string
+			plan engine.Plan
+		}{
+			{
+				name: "unlink targeting wantPath",
+				plan: engine.Plan{
+					Meta: engine.Meta{Action: "remove", Targets: []string{}, Project: &engine.ProjectScope{ProjectDir: projDir, Root: engine.ProjectRootClaude, SkillName: "alpha"}},
+					Steps: []engine.Step{
+						{Kind: engine.StepUnlink, Path: skillPath, Target: relTarget, Pre: []engine.Image{{Path: skillPath, State: engine.StateLink, Target: relTarget}}, Post: []engine.Image{{Path: skillPath, State: engine.StateAbsent}}},
+						{Kind: engine.StepRemoveTree, Path: skillPath, Pre: []engine.Image{{Path: skillPath, State: engine.StateTree, TreeSHA: treeSHA}}, Post: []engine.Image{{Path: skillPath, State: engine.StateAbsent}}},
+					},
+				},
+			},
+			{
+				name: "unlink outside project",
+				plan: engine.Plan{
+					Meta: engine.Meta{Action: "remove", Targets: []string{}, Project: &engine.ProjectScope{ProjectDir: projDir, Root: engine.ProjectRootClaude, SkillName: "alpha"}},
+					Steps: []engine.Step{
+						{Kind: engine.StepUnlink, Path: filepath.Join(projDir, ".codex", "skills", "alpha"), Target: relTarget, Pre: []engine.Image{{Path: filepath.Join(projDir, ".codex", "skills", "alpha"), State: engine.StateLink, Target: relTarget}}, Post: []engine.Image{{Path: filepath.Join(projDir, ".codex", "skills", "alpha"), State: engine.StateAbsent}}},
+						{Kind: engine.StepRemoveTree, Path: skillPath, Pre: []engine.Image{{Path: skillPath, State: engine.StateTree, TreeSHA: treeSHA}}, Post: []engine.Image{{Path: skillPath, State: engine.StateAbsent}}},
+					},
+				},
+			},
+			{
+				name: "duplicate unlink path",
+				plan: engine.Plan{
+					Meta: engine.Meta{Action: "remove", Targets: []string{}, Project: &engine.ProjectScope{ProjectDir: projDir, Root: engine.ProjectRootClaude, SkillName: "alpha"}},
+					Steps: []engine.Step{
+						{Kind: engine.StepUnlink, Path: linkPath, Target: relTarget, Pre: []engine.Image{{Path: linkPath, State: engine.StateLink, Target: relTarget}}, Post: []engine.Image{{Path: linkPath, State: engine.StateAbsent}}},
+						{Kind: engine.StepUnlink, Path: linkPath, Target: relTarget, Pre: []engine.Image{{Path: linkPath, State: engine.StateLink, Target: relTarget}}, Post: []engine.Image{{Path: linkPath, State: engine.StateAbsent}}},
+						{Kind: engine.StepRemoveTree, Path: skillPath, Pre: []engine.Image{{Path: skillPath, State: engine.StateTree, TreeSHA: treeSHA}}, Post: []engine.Image{{Path: skillPath, State: engine.StateAbsent}}},
+					},
+				},
+			},
+			{
+				name: "unlink after removeTree",
+				plan: engine.Plan{
+					Meta: engine.Meta{Action: "remove", Targets: []string{}, Project: &engine.ProjectScope{ProjectDir: projDir, Root: engine.ProjectRootClaude, SkillName: "alpha"}},
+					Steps: []engine.Step{
+						{Kind: engine.StepRemoveTree, Path: skillPath, Pre: []engine.Image{{Path: skillPath, State: engine.StateTree, TreeSHA: treeSHA}}, Post: []engine.Image{{Path: skillPath, State: engine.StateAbsent}}},
+						{Kind: engine.StepUnlink, Path: linkPath, Target: relTarget, Pre: []engine.Image{{Path: linkPath, State: engine.StateLink, Target: relTarget}}, Post: []engine.Image{{Path: linkPath, State: engine.StateAbsent}}},
+					},
+				},
+			},
+		}
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				p := reID(t, tc.plan)
+				if err := p.ValidateProjectScope(); !errors.Is(err, engine.ErrInvalidStep) {
+					t.Errorf("ValidateProjectScope() = %v, want ErrInvalidStep", err)
+				}
+			})
+		}
+	})
+
+	t.Run("Apply, Undo, and crash recovery use ProjectFS without legacy Links", func(t *testing.T) {
+		e, _ := newEnv(t)
+		noOwnLevels(t, e)
+		filesSpy := &spyFiles{Files: fsadapter.NewFileOps(e.p.Guard())}
+		linksSpy := &spyLinks{Links: fsadapter.NewLinkOps(e.p.Guard())}
+		hashSpy := &spyHash{}
+
+		pDir := filepath.Join(filepath.Dir(e.home.Root()), "proj-links")
+		sDir := filepath.Join(pDir, ".claude", "skills", "alpha")
+		lPath := filepath.Join(pDir, ".agents", "skills", "alpha")
+		must(t, os.MkdirAll(sDir, 0o755))
+		must(t, os.WriteFile(filepath.Join(sDir, "SKILL.md"), []byte("---\nname: alpha\n---\n"), 0o644))
+		must(t, os.MkdirAll(filepath.Dir(lPath), 0o755))
+		must(t, os.Symlink(relTarget, lPath))
+		beforeTree, err := treehash.Dir(sDir)
+		must(t, err)
+
+		eng := newProjectEnabledEngine(e, filesSpy, linksSpy, hashSpy, pDir, nil)
+		b := eng.NewBuilder(engine.Meta{
+			Action:  "remove",
+			Targets: []string{},
+			Project: &engine.ProjectScope{ProjectDir: pDir, Root: engine.ProjectRootClaude, SkillName: "alpha"},
+		})
+		must(t, b.Unlink(lPath, relTarget))
+		must(t, b.RemoveTree(sDir))
+		plan, err := b.Build()
+		must(t, err)
+
+		out, err := eng.Apply(t.Context(), plan)
+		must(t, err)
+		for _, c := range linksSpy.calls {
+			if strings.Contains(c, pDir) {
+				t.Fatalf("Apply touched project link via legacy Links: %s", c)
+			}
+		}
+		if _, err := os.Lstat(lPath); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("link still exists after Apply: %v", err)
+		}
+		if _, err := os.Lstat(sDir); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("skill dir still exists after Apply: %v", err)
+		}
+
+		// Foreign occupant at link slot blocks UndoPlan with ErrChangedSince.
+		must(t, os.WriteFile(lPath, []byte("occupant"), 0o644))
+		if _, err := eng.UndoPlan(out.SnapshotID); !errors.Is(err, engine.ErrChangedSince) {
+			t.Fatalf("UndoPlan with occupant at link slot = %v, want ErrChangedSince", err)
+		}
+		must(t, os.Remove(lPath))
+
+		linksSpy.calls = nil
+		_, err = eng.Undo(t.Context(), out.SnapshotID)
+		must(t, err)
+		for _, c := range linksSpy.calls {
+			if strings.Contains(c, pDir) {
+				t.Fatalf("Undo touched project link via legacy Links: %s", c)
+			}
+		}
+		restoredTree, err := treehash.Dir(sDir)
+		must(t, err)
+		if restoredTree.SHA != beforeTree.SHA {
+			t.Fatalf("restored tree SHA = %s, want %s", restoredTree.SHA, beforeTree.SHA)
+		}
+		gotTarget, err := os.Readlink(lPath)
+		must(t, err)
+		if gotTarget != relTarget {
+			t.Fatalf("restored link target = %q, want %q", gotTarget, relTarget)
+		}
+
+		// Crash recovery after StepUnlink completed (LastCompleted = 0) rolls back the link via ProjectFS.
+		run, err := eng.Begin(t.Context(), plan)
+		must(t, err)
+		must(t, os.Remove(lPath))
+		recPath := engine.RecordFile(e.p)
+		recBytes, err := os.ReadFile(recPath)
+		must(t, err)
+		var rec engine.Record
+		must(t, json.Unmarshal(recBytes, &rec))
+		rec.LastCompleted = 0
+		updatedBytes, err := json.MarshalIndent(rec, "", "  ")
+		must(t, err)
+		must(t, os.WriteFile(recPath, append(updatedBytes, '\n'), 0o600))
+		must(t, run.Release())
+
+		linksSpy.calls = nil
+		recOutcome, err := eng.Recover(t.Context())
+		must(t, err)
+		if !recOutcome.Found || !recOutcome.RolledBack {
+			t.Fatalf("Recover result = %+v, want Found=true RolledBack=true", recOutcome)
+		}
+		for _, c := range linksSpy.calls {
+			if strings.Contains(c, pDir) {
+				t.Fatalf("Recover touched project link via legacy Links: %s", c)
+			}
+		}
+		gotTarget, err = os.Readlink(lPath)
+		must(t, err)
+		if gotTarget != relTarget {
+			t.Fatalf("recovered link target = %q, want %q", gotTarget, relTarget)
+		}
+	})
+}

@@ -257,6 +257,18 @@ func (e *Engine) do(rec Record, i int) (*domain.ParkedEntry, error) {
 	if rec.Plan.HasProjectScope() {
 		proj := *rec.Plan.Project
 		switch s.Kind {
+		case StepUnlink:
+			root, name, ok := parseProjectSlot(proj.ProjectDir, s.Path)
+			if !ok {
+				return nil, fmt.Errorf("%w: invalid project link path %q", ErrInvalidStep, s.Path)
+			}
+			return nil, e.d.ProjectFS.RemoveLink(proj.ProjectDir, string(root), name, s.Target)
+		case StepLink:
+			root, name, ok := parseProjectSlot(proj.ProjectDir, s.Path)
+			if !ok {
+				return nil, fmt.Errorf("%w: invalid project link path %q", ErrInvalidStep, s.Path)
+			}
+			return nil, e.d.ProjectFS.CreateLink(proj.ProjectDir, string(root), name, s.Target)
 		case StepRemoveTree:
 			return nil, e.removeProjectTree(proj, e.trash(rec, i))
 		case StepRestoreTree:

@@ -358,3 +358,85 @@ func TestTUISymlinkedProjectRootAndSymlinkedCwdAreSafe(t *testing.T) {
 		t.Fatalf("external target mutated: err=%v got=%q want=%q", err, gotOutside.SHA, wantOutside.SHA)
 	}
 }
+
+func TestTUIProjectRemoveSymlinksAndUndo(t *testing.T) {
+	mc := newMachine(t)
+	proj := realTUITempDir(t)
+	writeTUIProjectSkill(t, proj, ".claude/skills/golang-code-style/SKILL.md", graphtest.SkillMD("golang-code-style", "project claude skill"))
+	writeTUIProjectSkill(t, proj, ".claude/skills/golang-code-style/notes.txt", "keep exact bytes\n")
+	if err := os.MkdirAll(filepath.Join(proj, ".agents/skills"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	const relTarget = "../../.claude/skills/golang-code-style"
+	if err := os.Symlink(relTarget, filepath.Join(proj, ".agents/skills/golang-code-style")); err != nil {
+		t.Fatal(err)
+	}
+	wantTreeHash, err := treehash.Dir(filepath.Join(proj, ".claude/skills/golang-code-style"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	m := openSized(t, newProjectTUIApp(t, mc, proj), goldenWidth, 40)
+
+	// Selecting the symlink row must not offer remove and pressing e must not open a plan.
+	linkedScreen := selectProjectSkillRow(t, m, filepath.Join(proj, ".agents/skills/golang-code-style"), "enlace simbólico")
+	if strings.Contains(linkedScreen, text.TUIActionRemove) {
+		t.Fatalf("project symlink row wrongly offered remove:\n%s", linkedScreen)
+	}
+	beforeHome := mc.hash()
+	pressRun(m, "e")
+	if m.InPlanForTest() || mc.hash() != beforeHome {
+		t.Fatalf("e on project symlink row opened plan or mutated home:\n%s", screen(m))
+	}
+
+	// Selecting the real folder row and pressing e opens preview showing both folder and symlink.
+	m = openSized(t, newProjectTUIApp(t, mc, proj), goldenWidth, 40)
+	selectProjectSkillRow(t, m, filepath.Join(proj, ".claude/skills/golang-code-style"), "Skill del proyecto actual (.claude/skills)")
+	pressRun(m, "e")
+	if !m.InPlanForTest() {
+		t.Fatalf("e on real project skill did not open plan; status=%q", m.StatusForTest())
+	}
+	confirmText := flat(screen(m))
+	for _, want := range []string{
+		flat(filepath.Join(proj, ".claude/skills/golang-code-style")),
+		flat(filepath.Join(proj, ".agents/skills/golang-code-style")),
+	} {
+		if !strings.Contains(confirmText, want) {
+			t.Errorf("TUI confirmation lacks %q:\n%s", want, screen(m))
+		}
+	}
+	if _, err := os.Lstat(filepath.Join(proj, ".agents/skills/golang-code-style")); err != nil {
+		t.Fatalf("preview mutated symlink on disk: %v", err)
+	}
+
+	// Confirming with s deletes both folder and symlink, and removes both rows from the list.
+	pressRun(m, "s")
+	if _, err := os.Lstat(filepath.Join(proj, ".claude/skills/golang-code-style")); !os.IsNotExist(err) {
+		t.Fatalf("real folder still exists after confirm: err=%v", err)
+	}
+	if _, err := os.Lstat(filepath.Join(proj, ".agents/skills/golang-code-style")); !os.IsNotExist(err) {
+		t.Fatalf("project symlink still exists after confirm: err=%v", err)
+	}
+	for _, line := range strings.Split(screen(m), "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "Listo:") {
+			continue
+		}
+		if strings.Contains(trimmed, "golang-code-style") || strings.Contains(trimmed, "proyecto ·") {
+			t.Errorf("deleted project skill/symlink row still shown in Skills: %q\n%s", trimmed, screen(m))
+		}
+	}
+
+	// Undoing with z + s restores both the real folder and the symlink with exact target.
+	pressRun(m, "z")
+	if !m.InPlanForTest() {
+		t.Fatalf("z did not open undo plan; status=%q", m.StatusForTest())
+	}
+	pressRun(m, "s")
+	if got, err := treehash.Dir(filepath.Join(proj, ".claude/skills/golang-code-style")); err != nil || got.SHA != wantTreeHash.SHA {
+		t.Fatalf("restored tree hash = %q err=%v, want %q", got.SHA, err, wantTreeHash.SHA)
+	}
+	if got, err := os.Readlink(filepath.Join(proj, ".agents/skills/golang-code-style")); err != nil || got != relTarget {
+		t.Fatalf("restored symlink target = %q err=%v, want %q", got, err, relTarget)
+	}
+}

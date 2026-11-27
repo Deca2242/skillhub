@@ -30,6 +30,7 @@ type ProjectInspector interface {
 		onRejected func(root, name, path, reason string),
 	) error
 	InspectSkillTree(projectDir, root, name string) (skillPath string, tree treehash.Tree, rejectKind string, err error)
+	FindLinksToSkill(projectDir, targetRoot, targetName string, onLink func(root, name, linkPath, target string)) error
 	SameDevice(projectDir, root, otherDir string) (bool, error)
 }
 
@@ -78,6 +79,18 @@ func (o *observation) removeProject(root, name string) (Plan, error) {
 		return Plan{}, fmt.Errorf("move %s to %s: %w", skillPath, filepath.Dir(o.r.d.Paths.ParkedDir()), ports.ErrCrossDevice)
 	}
 
+	type projectLink struct {
+		root   string
+		path   string
+		target string
+	}
+	var links []projectLink
+	if err := o.r.d.Project.FindLinksToSkill(cleanProj, root, name, func(linkRoot, _, linkPath, linkTarget string) {
+		links = append(links, projectLink{root: linkRoot, path: linkPath, target: linkTarget})
+	}); err != nil {
+		return Plan{}, fmt.Errorf("find links to %s: %w", skillPath, err)
+	}
+
 	scope := &engine.ProjectScope{
 		ProjectDir: cleanProj,
 		Root:       engine.ProjectRoot(root),
@@ -90,6 +103,17 @@ func (o *observation) removeProject(root, name string) (Plan, error) {
 		ReviewedTreeSHA: tree.SHA,
 		Project:         scope,
 	})
+	pvLinks := make([]Link, 0, len(links))
+	for _, l := range links {
+		if err := b.Unlink(l.path, l.target); err != nil {
+			return Plan{}, err
+		}
+		pvLinks = append(pvLinks, Link{
+			Path:      l.path,
+			Target:    l.target,
+			Harnesses: []string{"proyecto (" + l.root + ")"},
+		})
+	}
 	if err := b.RemoveTree(skillPath); err != nil {
 		return Plan{}, err
 	}
@@ -106,6 +130,7 @@ func (o *observation) removeProject(root, name string) (Plan, error) {
 		SkillName:   name,
 		Folder:      skillPath,
 		TreeSHA:     tree.SHA,
+		Links:       pvLinks,
 		Homonyms:    o.homonyms(skillPath, name, tree.SHA, name),
 	}
 	return Plan{Plan: p, Preview: pv}, nil

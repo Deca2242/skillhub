@@ -187,3 +187,62 @@ func TestGroupRemovePreviewAndSummary(t *testing.T) {
 		t.Errorf("TUIDone = %q", done)
 	}
 }
+
+func TestProjectRemovePreviewAndSummaryWithLinks(t *testing.T) {
+	withLinks := app.Proposal{
+		Request: app.Request{Action: app.ActionRemove, Key: "project:.claude/skills/golang-code-style"},
+		PlanID:  "id-proj-links",
+		Remove: &app.RemovePreview{
+			Key:         "project:.claude/skills/golang-code-style",
+			SkillName:   "golang-code-style",
+			SkillID:     "project:.claude/skills/golang-code-style",
+			Project:     true,
+			ProjectRoot: ".claude/skills",
+			Folder:      "/tmp/proj/.claude/skills/golang-code-style",
+			TreeSHA:     "abcdef1234567890",
+			Links: []app.LinkChange{
+				{Path: "/tmp/proj/.agents/skills/golang-code-style", Target: "../../.claude/skills/golang-code-style"},
+			},
+		},
+	}
+
+	cliOut := text.Proposal(withLinks)
+	for _, want := range []string{
+		"/tmp/proj/.claude/skills/golang-code-style",
+		"Enlaces que se quitan:",
+		"/tmp/proj/.agents/skills/golang-code-style → ../../.claude/skills/golang-code-style",
+		"skillhub undo",
+	} {
+		if !strings.Contains(cliOut, want) {
+			t.Errorf("Proposal with project links lacks %q:\n%s", want, cliOut)
+		}
+	}
+
+	s := text.TUIPlanSummary(withLinks, agentNames)
+	all := s.Question + "\n" + strings.Join(s.Lines, "\n")
+	for _, want := range []string{
+		"¿Eliminar golang-code-style (.claude/skills de este proyecto)?",
+		"/tmp/proj/.claude/skills/golang-code-style",
+		"/tmp/proj/.agents/skills/golang-code-style",
+		"z",
+	} {
+		if !strings.Contains(all, want) {
+			t.Errorf("TUIPlanSummary with project links lacks %q:\n%s", want, all)
+		}
+	}
+
+	withoutLinks := withLinks
+	withoutLinksRemove := *withLinks.Remove
+	withoutLinksRemove.Links = nil
+	withoutLinks.Remove = &withoutLinksRemove
+
+	plainOut := text.Proposal(withoutLinks)
+	if strings.Contains(plainOut, "Enlaces que se quitan") || strings.Contains(plainOut, "enlaces simbólicos del proyecto") {
+		t.Errorf("Proposal without project links unexpectedly mentions links:\n%s", plainOut)
+	}
+	plainSum := text.TUIPlanSummary(withoutLinks, agentNames)
+	plainAll := strings.Join(plainSum.Lines, "\n")
+	if strings.Contains(plainAll, "enlaces del proyecto") {
+		t.Errorf("TUIPlanSummary without project links unexpectedly mentions links:\n%s", plainAll)
+	}
+}

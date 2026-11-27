@@ -138,8 +138,24 @@ func (e *Engine) undoStep(rec Record, snap Snapshot, i int, prog Progress) error
 		}
 		return e.d.Links.RenameNoReplace(s.Dst, s.Src)
 	case StepLink:
+		if rec.Plan.HasProjectScope() {
+			proj := *rec.Plan.Project
+			root, name, ok := parseProjectSlot(proj.ProjectDir, s.Path)
+			if !ok {
+				return fmt.Errorf("%w: invalid project link path %q", ErrInvalidStep, s.Path)
+			}
+			return e.d.ProjectFS.RemoveLink(proj.ProjectDir, string(root), name, s.Target)
+		}
 		return e.d.Links.RemoveLink(s.Path, s.Target)
 	case StepUnlink:
+		if rec.Plan.HasProjectScope() {
+			proj := *rec.Plan.Project
+			root, name, ok := parseProjectSlot(proj.ProjectDir, s.Path)
+			if !ok {
+				return fmt.Errorf("%w: invalid project link path %q", ErrInvalidStep, s.Path)
+			}
+			return e.d.ProjectFS.CreateLink(proj.ProjectDir, string(root), name, s.Target)
+		}
 		return e.d.Links.Symlink(s.Target, s.Path)
 	case StepRemoveTree:
 		t, ok := snap.treeCopy(s.Path)

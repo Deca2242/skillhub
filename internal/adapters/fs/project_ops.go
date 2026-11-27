@@ -151,6 +151,339 @@ func (p *ProjectOps) InspectSkillTree(projectDir, root, name string) (skillPath 
 	return skillPath, tr, "", nil
 }
 
+// FindLinksToSkill scans both approved roots (.agents/skills and .claude/skills)
+// inside projectDir without following symlinks and invokes onLink for every
+// direct symlink whose target resolves lexically and safely to
+// projectDir/targetRoot/targetName, preserving the exact raw target string.
+func (p *ProjectOps) FindLinksToSkill(
+	projectDir, targetRoot, targetName string,
+	onLink func(root, name, linkPath, target string),
+) error {
+	spec, cleanProj, err := p.validateArgs("find-links", projectDir, targetRoot, targetName)
+	if err != nil {
+		return err
+	}
+	skillPath := filepath.Join(cleanProj, spec.agent, spec.leaf, targetName)
+	if err := p.guard.CheckLexical(skillPath); err != nil {
+		return fmt.Errorf("find-links %s: %w", skillPath, err)
+	}
+
+	projFD, err := p.scanner.openStartupDirNoFollow(cleanProj)
+	if err != nil {
+		return err
+	}
+	defer closeFD(projFD)
+
+	realProjDir, err := p.scanner.verifyFDScope(projFD, cleanProj)
+	if err != nil {
+		return fmt.Errorf("find-links %s: %w", skillPath, err)
+	}
+
+	// Verify that the target skill directory itself is a real directory inside realProjDir.
+	tAgentPath := filepath.Join(cleanProj, spec.agent)
+	tAgentFD, err := openVerifiedDirStep(p.scanner, "find-links", projFD, spec.agent, tAgentPath, filepath.Join(realProjDir, spec.agent), tAgentPath)
+	if err != nil {
+		return err
+	}
+	tRootPath := filepath.Join(tAgentPath, spec.leaf)
+	tSkillsFD, err := openVerifiedDirStep(p.scanner, "find-links", tAgentFD, spec.leaf, tRootPath, filepath.Join(realProjDir, spec.agent, spec.leaf), tRootPath)
+	closeFD(tAgentFD)
+	if err != nil {
+		return err
+	}
+	tSkillFD, err := openVerifiedDirStep(p.scanner, "find-links", tSkillsFD, targetName, skillPath, filepath.Join(realProjDir, spec.agent, spec.leaf, targetName), skillPath)
+	closeFD(tSkillsFD)
+	if err != nil {
+		return err
+	}
+	closeFD(tSkillFD)
+
+	for _, linkSpec := range projectRootSpecs {
+		agentPath := filepath.Join(cleanProj, linkSpec.agent)
+		if err := p.guard.CheckLexical(agentPath); err != nil {
+			continue
+		}
+		agentFD, err := openVerifiedDirStep(p.scanner, "find-links", projFD, linkSpec.agent, agentPath, filepath.Join(realProjDir, linkSpec.agent), agentPath)
+		if err != nil {
+			if isSkippableProjectRootErr(err) {
+				continue
+			}
+			return err
+		}
+		rootPath := filepath.Join(agentPath, linkSpec.leaf)
+		if err := p.guard.CheckLexical(rootPath); err != nil {
+			closeFD(agentFD)
+			continue
+		}
+		skillsFD, err := openVerifiedDirStep(p.scanner, "find-links", agentFD, linkSpec.leaf, rootPath, filepath.Join(realProjDir, linkSpec.agent, linkSpec.leaf), rootPath)
+		closeFD(agentFD)
+		if err != nil {
+			if isSkippableProjectRootErr(err) {
+				continue
+			}
+			return err
+		}
+
+		if err := p.scanRootLinks(skillsFD, rootPath, string(linkSpec.kind), skillPath, onLink); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func isSkippableProjectRootErr(err error) bool {
+	return errors.Is(err, iofs.ErrNotExist) ||
+		errors.Is(err, ErrProjectTreeLinked) ||
+		errors.Is(err, ErrProjectTreeNotDir) ||
+		errors.Is(err, ErrProjectScopeUnproven) ||
+		errors.Is(err, paths.ErrForbidden)
+}
+
+func (p *ProjectOps) scanRootLinks(
+	skillsFD int,
+	rootPath string,
+	linkRoot string,
+	skillPath string,
+	onLink func(root, name, linkPath, target string),
+) error {
+	dirFile := os.NewFile(uintptr(skillsFD), rootPath)
+	defer func() { _ = dirFile.Close() }()
+
+	names, err := dirFile.Readdirnames(-1)
+	if err != nil {
+		return &iofs.PathError{Op: "readdir", Path: rootPath, Err: err}
+	}
+	slices.Sort(names)
+
+	rawFD := int(dirFile.Fd())
+	for _, name := range names {
+		if !validProjectChildName(name) {
+			continue
+		}
+		var st unix.Stat_t
+		if err := fstatatNoFollow(rawFD, name, &st); err != nil {
+			continue
+		}
+		if st.Mode&unix.S_IFMT != unix.S_IFLNK {
+			continue
+		}
+		rawTarget, err := readlinkat(rawFD, name)
+		if err != nil || rawTarget == "" {
+			continue
+		}
+		if !linkResolvesToSkill(p.guard, rootPath, rawTarget, skillPath) {
+			continue
+		}
+		linkPath := filepath.Join(rootPath, name)
+		if linkPath == skillPath {
+			continue
+		}
+		if onLink != nil {
+			onLink(linkRoot, name, linkPath, rawTarget)
+		}
+	}
+	return nil
+}
+
+func linkResolvesToSkill(guard paths.Guard, rootPath, rawTarget, skillPath string) bool {
+	var resolved string
+	if filepath.IsAbs(rawTarget) {
+		if hasDotDotSegment(rawTarget) {
+			return false
+		}
+		resolved = filepath.Clean(rawTarget)
+	} else {
+		if hasEmbeddedDotDot(rawTarget) {
+			return false
+		}
+		resolved = filepath.Clean(filepath.Join(rootPath, rawTarget))
+	}
+	if err := guard.CheckLexical(resolved); err != nil {
+		return false
+	}
+	return resolved == skillPath
+}
+
+func hasEmbeddedDotDot(rel string) bool {
+	seenNonDot := false
+	for _, seg := range splitSlash(filepath.ToSlash(rel)) {
+		switch seg {
+		case "", ".":
+		case "..":
+			if seenNonDot {
+				return true
+			}
+		default:
+			seenNonDot = true
+		}
+	}
+	return false
+}
+
+func splitSlash(s string) []string {
+	var out []string
+	start := 0
+	for i := 0; i < len(s); i++ {
+		if s[i] == '/' {
+			out = append(out, s[start:i])
+			start = i + 1
+		}
+	}
+	return append(out, s[start:])
+}
+
+// ObserveLink inspects one exact slot under projectDir/root/name without
+// following symlinks. Missing agent/skills/entry returns exists=false.
+func (p *ProjectOps) ObserveLink(projectDir, root, name string) (exists bool, isLink bool, target string, err error) {
+	spec, cleanProj, err := p.validateArgs("observe-link", projectDir, root, name)
+	if err != nil {
+		return false, false, "", err
+	}
+	linkPath := filepath.Join(cleanProj, spec.agent, spec.leaf, name)
+	if err := p.guard.CheckLexical(linkPath); err != nil {
+		return false, false, "", fmt.Errorf("observe link %s: %w", linkPath, err)
+	}
+
+	projFD, err := p.scanner.openStartupDirNoFollow(cleanProj)
+	if err != nil {
+		return false, false, "", err
+	}
+	realProjDir, err := p.scanner.verifyFDScope(projFD, cleanProj)
+	if err != nil {
+		closeFD(projFD)
+		return false, false, "", fmt.Errorf("observe link %s: %w", linkPath, err)
+	}
+
+	agentPath := filepath.Join(cleanProj, spec.agent)
+	realAgentDir := filepath.Join(realProjDir, spec.agent)
+	agentFD, err := openVerifiedDirStep(p.scanner, "observe-link", projFD, spec.agent, agentPath, realAgentDir, agentPath)
+	closeFD(projFD)
+	if err != nil {
+		if errors.Is(err, iofs.ErrNotExist) {
+			return false, false, "", nil
+		}
+		return false, false, "", err
+	}
+
+	rootPath := filepath.Join(agentPath, spec.leaf)
+	realRootDir := filepath.Join(realAgentDir, spec.leaf)
+	skillsFD, err := openVerifiedDirStep(p.scanner, "observe-link", agentFD, spec.leaf, rootPath, realRootDir, rootPath)
+	closeFD(agentFD)
+	if err != nil {
+		if errors.Is(err, iofs.ErrNotExist) {
+			return false, false, "", nil
+		}
+		return false, false, "", err
+	}
+	defer closeFD(skillsFD)
+
+	var st unix.Stat_t
+	err = fstatatNoFollow(skillsFD, name, &st)
+	if errors.Is(err, unix.ENOENT) {
+		return false, false, "", nil
+	}
+	if err != nil {
+		return false, false, "", &iofs.PathError{Op: "lstat", Path: linkPath, Err: err}
+	}
+	if st.Mode&unix.S_IFMT == unix.S_IFLNK {
+		rawTarget, rerr := readlinkat(skillsFD, name)
+		if rerr != nil {
+			return false, false, "", &iofs.PathError{Op: "readlink", Path: linkPath, Err: rerr}
+		}
+		return true, true, rawTarget, nil
+	}
+	return true, false, "", nil
+}
+
+// RemoveLink removes a direct symlink at projectDir/root/name only after
+// verifying without following symlinks that it is a symlink whose raw target
+// matches expectedTarget byte for byte.
+func (p *ProjectOps) RemoveLink(projectDir, root, name, expectedTarget string) error {
+	spec, cleanProj, err := p.validateArgs("remove-link", projectDir, root, name)
+	if err != nil {
+		return err
+	}
+	skillsFD, rootPath, err := p.openVerifiedSkillsRoot(cleanProj, spec, "remove-link")
+	if err != nil {
+		return err
+	}
+	defer closeFD(skillsFD)
+
+	linkPath := filepath.Join(rootPath, name)
+	var st unix.Stat_t
+	if err := fstatatNoFollow(skillsFD, name, &st); err != nil {
+		return &iofs.PathError{Op: "lstat", Path: linkPath, Err: err}
+	}
+	if st.Mode&unix.S_IFMT != unix.S_IFLNK {
+		return &iofs.PathError{Op: "remove-link", Path: linkPath, Err: ErrProjectSkillInvalid}
+	}
+	rawTarget, err := readlinkat(skillsFD, name)
+	if err != nil {
+		return &iofs.PathError{Op: "readlink", Path: linkPath, Err: err}
+	}
+	if rawTarget != expectedTarget {
+		return fmt.Errorf("remove link %s: target %q does not match expected %q", linkPath, rawTarget, expectedTarget)
+	}
+	if err := unix.Unlinkat(skillsFD, name, 0); err != nil {
+		return &iofs.PathError{Op: "unlink", Path: linkPath, Err: err}
+	}
+	return syncFD("remove-link", rootPath, skillsFD)
+}
+
+// CreateLink creates a direct symlink at projectDir/root/name with exact target
+// without following symlinks or replacing an existing entry, recreating missing
+// .agents/.claude/skills directories safely if needed.
+func (p *ProjectOps) CreateLink(projectDir, root, name, target string) error {
+	spec, cleanProj, err := p.validateArgs("create-link", projectDir, root, name)
+	if err != nil {
+		return err
+	}
+	if target == "" {
+		return fmt.Errorf("create link %s: %w: empty target", filepath.Join(cleanProj, spec.agent, spec.leaf, name), ErrProjectSkillInvalid)
+	}
+
+	projFD, err := p.scanner.openStartupDirNoFollow(cleanProj)
+	if err != nil {
+		return err
+	}
+	realProjDir, err := p.scanner.verifyFDScope(projFD, cleanProj)
+	if err != nil {
+		closeFD(projFD)
+		return fmt.Errorf("create link %s: %w", filepath.Join(cleanProj, spec.agent, spec.leaf, name), err)
+	}
+
+	agentPath := filepath.Join(cleanProj, spec.agent)
+	realAgentDir := filepath.Join(realProjDir, spec.agent)
+	agentFD, err := ensureVerifiedDirStep(p.scanner, "create-link", projFD, spec.agent, agentPath, realAgentDir)
+	closeFD(projFD)
+	if err != nil {
+		return err
+	}
+
+	rootPath := filepath.Join(agentPath, spec.leaf)
+	realRootDir := filepath.Join(realAgentDir, spec.leaf)
+	skillsFD, err := ensureVerifiedDirStep(p.scanner, "create-link", agentFD, spec.leaf, rootPath, realRootDir)
+	closeFD(agentFD)
+	if err != nil {
+		return err
+	}
+	defer closeFD(skillsFD)
+
+	linkPath := filepath.Join(rootPath, name)
+	var st unix.Stat_t
+	err = fstatatNoFollow(skillsFD, name, &st)
+	if err == nil {
+		return &iofs.PathError{Op: "symlink", Path: linkPath, Err: iofs.ErrExist}
+	}
+	if !errors.Is(err, unix.ENOENT) {
+		return &iofs.PathError{Op: "lstat", Path: linkPath, Err: err}
+	}
+	if err := unix.Symlinkat(target, skillsFD, name); err != nil {
+		return &iofs.PathError{Op: "symlink", Path: linkPath, Err: err}
+	}
+	return syncFD("create-link", rootPath, skillsFD)
+}
+
 // ObserveSkill inspects one exact slot under projectDir/root/name without
 // following symlinks. Absent skill or missing root returns exists=false;
 // non-directory or missing/non-regular SKILL.md occupants return foreign=true;

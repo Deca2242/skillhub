@@ -344,3 +344,83 @@ func TestCLIProjectPendingRecoverRequiresSameProject(t *testing.T) {
 		t.Fatalf("recovered tree hash = %s, want %s", gotHash.SHA, wantHash.SHA)
 	}
 }
+
+func TestCLIProjectRemoveSymlinksAndUndo(t *testing.T) {
+	m := newMachine(t)
+	proj := realTempDir(t)
+	outside := realTempDir(t)
+	writeProjectSkillFile(t, outside, "SKILL.md", graphtest.SkillMD("ext-link", "outside"))
+	writeProjectSkillFile(t, proj, ".claude/skills/golang-code-style/SKILL.md", graphtest.SkillMD("golang-code-style", "project claude skill"))
+	writeProjectSkillFile(t, proj, ".claude/skills/golang-code-style/extra.txt", "keep exact bytes\n")
+	writeProjectSkillFile(t, proj, ".claude/skills/other/SKILL.md", graphtest.SkillMD("other", "other skill"))
+	must(t, os.MkdirAll(filepath.Join(proj, ".agents/skills"), 0o755))
+	const relTarget = "../../.claude/skills/golang-code-style"
+	must(t, os.Symlink(relTarget, filepath.Join(proj, ".agents/skills/golang-code-style")))
+	must(t, os.Symlink("../../.claude/skills/other", filepath.Join(proj, ".agents/skills/otra")))
+	must(t, os.Symlink(outside, filepath.Join(proj, ".agents/skills/ext-link")))
+
+	wantTreeHash, err := treehash.Dir(filepath.Join(proj, ".claude/skills/golang-code-style"))
+	must(t, err)
+
+	// Selecting the symlink directly must still be refused.
+	directLink := runWithProject(t, m, proj, "", "skills", "remove", "project:.agents/skills/golang-code-style")
+	if directLink.code == 0 || !strings.Contains(directLink.stderr, "enlace") {
+		t.Fatalf("direct symlink remove = exit %d stderr=%q, want refusal", directLink.code, directLink.stderr)
+	}
+
+	// Dry-run on the real folder previews both the folder and the symlink without mutating disk.
+	dry := runWithProject(t, m, proj, "", "skills", "remove", "project:.claude/skills/golang-code-style", "--dry-run")
+	if dry.code != 0 {
+		t.Fatalf("dry-run exit %d\nstdout: %s\nstderr: %s", dry.code, dry.stdout, dry.stderr)
+	}
+	for _, want := range []string{
+		filepath.Join(proj, ".claude/skills/golang-code-style"),
+		"Enlaces que se quitan:",
+		filepath.Join(proj, ".agents/skills/golang-code-style"),
+		relTarget,
+		"skillhub undo",
+		"--plan ",
+	} {
+		if !strings.Contains(dry.stdout, want) {
+			t.Errorf("dry-run lacks %q:\n%s", want, dry.stdout)
+		}
+	}
+	if _, err := os.Lstat(filepath.Join(proj, ".agents/skills/golang-code-style")); err != nil {
+		t.Fatalf("dry-run modified symlink: %v", err)
+	}
+
+	// Approved remove deletes both the real folder and the direct symlink, leaving other links untouched.
+	pid := planID(t, dry.stdout)
+	removed := runWithProject(t, m, proj, "", "skills", "remove", "project:.claude/skills/golang-code-style", "--yes", "--plan", pid)
+	if removed.code != 0 {
+		t.Fatalf("remove exit %d\nstdout: %s\nstderr: %s", removed.code, removed.stdout, removed.stderr)
+	}
+	if _, err := os.Lstat(filepath.Join(proj, ".claude/skills/golang-code-style")); !os.IsNotExist(err) {
+		t.Fatalf("real folder still exists: err=%v", err)
+	}
+	if _, err := os.Lstat(filepath.Join(proj, ".agents/skills/golang-code-style")); !os.IsNotExist(err) {
+		t.Fatalf("project symlink still exists (would be broken): err=%v", err)
+	}
+	if got, err := os.Readlink(filepath.Join(proj, ".agents/skills/otra")); err != nil || got != "../../.claude/skills/other" {
+		t.Fatalf("unrelated symlink altered: target=%q err=%v", got, err)
+	}
+	if got, err := os.Readlink(filepath.Join(proj, ".agents/skills/ext-link")); err != nil || got != outside {
+		t.Fatalf("outside symlink altered: target=%q err=%v", got, err)
+	}
+
+	// Undo in the same project restores the folder byte-for-byte and recreates the symlink with exact target.
+	undoDry := runWithProject(t, m, proj, "", "undo", "v2:remove", "--dry-run")
+	if undoDry.code != 0 {
+		t.Fatalf("undo dry-run exit %d\nstdout: %s\nstderr: %s", undoDry.code, undoDry.stdout, undoDry.stderr)
+	}
+	undone := runWithProject(t, m, proj, "", "undo", "v2:remove", "--yes", "--plan", planID(t, undoDry.stdout))
+	if undone.code != 0 {
+		t.Fatalf("undo exit %d\nstdout: %s\nstderr: %s", undone.code, undone.stdout, undone.stderr)
+	}
+	if got, err := treehash.Dir(filepath.Join(proj, ".claude/skills/golang-code-style")); err != nil || got.SHA != wantTreeHash.SHA {
+		t.Fatalf("restored tree hash = %q err=%v, want %q", got.SHA, err, wantTreeHash.SHA)
+	}
+	if got, err := os.Readlink(filepath.Join(proj, ".agents/skills/golang-code-style")); err != nil || got != relTarget {
+		t.Fatalf("restored symlink target = %q err=%v, want %q", got, err, relTarget)
+	}
+}
